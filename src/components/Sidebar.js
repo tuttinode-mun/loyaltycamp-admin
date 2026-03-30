@@ -7,6 +7,7 @@ const menuItems = [
   { path: '/clientes', label: 'Clientes', emoji: '👥' },
   { path: '/premios', label: 'Premios', emoji: '🎁' },
   { path: '/promociones', label: 'Promociones', emoji: '🏷️' },
+  { path: '/cajeros', label: 'Cajeros', emoji: '👨‍💼' },
 ];
 
 const Sidebar = () => {

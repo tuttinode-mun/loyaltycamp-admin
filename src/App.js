@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage';
 import ClientesPage from './pages/clientes/ClientesPage';
 import PremiosPage from './pages/premios/PremiosPage';
 import PromocionesPage from './pages/promociones/PromocionesPage';
+import CajerosPage from './pages/cajeros/CajerosPage';
 
 const ProtectedRoute = ({ children }) => {
   const { usuario, rol, cargando } = useAuth();
@@ -41,6 +42,7 @@ const AppRoutes = () => {
       <Route path="/clientes" element={<ProtectedRoute><ClientesPage /></ProtectedRoute>} />
       <Route path="/premios" element={<ProtectedRoute><PremiosPage /></ProtectedRoute>} />
       <Route path="/promociones" element={<ProtectedRoute><PromocionesPage /></ProtectedRoute>} />
+      <Route path="/cajeros" element={<ProtectedRoute><CajerosPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );
