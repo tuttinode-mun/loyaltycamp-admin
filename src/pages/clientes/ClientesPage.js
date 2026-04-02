@@ -3,12 +3,14 @@ import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { COLECCIONES } from '../../constants';
 import Layout from '../../components/Layout';
+import ClienteDetallePage from './ClienteDetallePage';
 
 const ClientesPage = () => {
   const [clientes, setClientes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [filtroNivel, setFiltroNivel] = useState('');
+  const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
 
   useEffect(() => {
     const cargarClientes = async () => {
@@ -129,7 +131,7 @@ const ClientesPage = () => {
             </thead>
             <tbody>
               {clientesFiltrados.map(cliente => (
-                <tr key={cliente.id} style={styles.tr}>
+                <tr key={cliente.id} style={styles.tr} onClick={() => setClienteSeleccionado(cliente.id)}>
                   <td style={styles.td}>
                     <div style={styles.clienteCell}>
                       <div style={styles.avatar}>
@@ -168,6 +170,12 @@ const ClientesPage = () => {
           </table>
         )}
       </div>
+      {clienteSeleccionado && (
+  <ClienteDetallePage
+    clienteId={clienteSeleccionado}
+    onCerrar={() => setClienteSeleccionado(null)}
+  />
+)}
     </Layout>
   );
 };
