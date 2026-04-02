@@ -9,6 +9,8 @@ const menuItems = [
   { path: '/promociones', label: 'Promociones', emoji: '🏷️' },
   { path: '/cajeros', label: 'Cajeros', emoji: '👨‍💼' },
   { path: '/sucursales', label: 'Sucursales', emoji: '🏪' },
+  { path: '/exportar', label: 'Exportar datos', emoji: '📥' },
+  { path: '/configuracion', label: 'Configuración', emoji: '⚙️' },
 ];
 
 const Sidebar = () => {

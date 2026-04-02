@@ -10,6 +10,8 @@ import PremiosPage from './pages/premios/PremiosPage';
 import PromocionesPage from './pages/promociones/PromocionesPage';
 import CajerosPage from './pages/cajeros/CajerosPage';
 import SucursalesPage from './pages/sucursales/SucursalesPage';
+import ExportarPage from './pages/ExportarPage';
+import ConfiguracionPage from './pages/ConfiguracionPage';
 
 const ProtectedRoute = ({ children }) => {
   const { usuario, rol, cargando } = useAuth();
@@ -46,6 +48,8 @@ const AppRoutes = () => {
       <Route path="/cajeros" element={<ProtectedRoute><CajerosPage /></ProtectedRoute>} />
       <Route path="*" element={<Navigate to="/" />} />
       <Route path="/sucursales" element={<ProtectedRoute><SucursalesPage /></ProtectedRoute>} />
+      <Route path="/exportar" element={<ProtectedRoute><ExportarPage /></ProtectedRoute>} />
+      <Route path="/configuracion" element={<ProtectedRoute><ConfiguracionPage /></ProtectedRoute>} />
     </Routes>
   );
 };
