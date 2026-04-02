@@ -10,6 +10,8 @@ const ConfiguracionPage = () => {
   const [guardando, setGuardando] = useState(false);
   const [config, setConfig] = useState({
     puntos_por_peso: 1,
+    niveles_visibles: true,
+    progreso_visible: true,
     niveles: {
       bronce: { min: 0, nombre: 'Bronce' },
       oro: { min: 1000, nombre: 'Oro' },
@@ -31,8 +33,6 @@ const ConfiguracionPage = () => {
       dias_inactividad: 180,
     },
     modo_canje: 'cajero',
-    idiomas_activos: ['es', 'en', 'fr'],
-    idioma_defecto: 'es',
   });
 
   useEffect(() => {
@@ -137,12 +137,53 @@ const ConfiguracionPage = () => {
         </div>
       </div>
 
+      {/* Visibilidad de niveles */}
+      <div style={styles.section}>
+        <h2 style={styles.sectionTitulo}>👁 Visibilidad de niveles para el cliente</h2>
+        <div style={styles.card}>
+          <p style={{ fontSize: 13, color: '#6B6B6B', marginTop: 0, marginBottom: 16 }}>
+            Controla si los clientes pueden ver su nivel de lealtad en la app.
+          </p>
+          <div style={styles.bonoRow}>
+            <div style={styles.bonoInfo}>
+              <div style={styles.bonoTitulo}>Mostrar niveles al cliente</div>
+              <div style={styles.bonoDesc}>El cliente puede ver si es Bronce, Oro o Platino en su perfil</div>
+            </div>
+            <div style={styles.bonoControls}>
+              <label style={styles.toggleLabel}>
+                <input
+                  type="checkbox"
+                  checked={config.niveles_visibles !== false}
+                  onChange={e => updateConfig('niveles_visibles', e.target.checked)}
+                />
+                {config.niveles_visibles !== false ? 'Visible' : 'Oculto'}
+              </label>
+            </div>
+          </div>
+          <div style={styles.divider} />
+          <div style={styles.bonoRow}>
+            <div style={styles.bonoInfo}>
+              <div style={styles.bonoTitulo}>Mostrar barra de progreso</div>
+              <div style={styles.bonoDesc}>El cliente puede ver cuántos puntos le faltan para el siguiente nivel</div>
+            </div>
+            <div style={styles.bonoControls}>
+              <label style={styles.toggleLabel}>
+                <input
+                  type="checkbox"
+                  checked={config.progreso_visible !== false}
+                  onChange={e => updateConfig('progreso_visible', e.target.checked)}
+                />
+                {config.progreso_visible !== false ? 'Visible' : 'Oculto'}
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Bonos */}
       <div style={styles.section}>
         <h2 style={styles.sectionTitulo}>🎁 Bonos automáticos</h2>
         <div style={styles.card}>
-
-          {/* Bienvenida */}
           <div style={styles.bonoRow}>
             <div style={styles.bonoInfo}>
               <div style={styles.bonoTitulo}>🎉 Bono de bienvenida</div>
@@ -162,7 +203,6 @@ const ConfiguracionPage = () => {
 
           <div style={styles.divider} />
 
-          {/* Primera compra */}
           <div style={styles.bonoRow}>
             <div style={styles.bonoInfo}>
               <div style={styles.bonoTitulo}>🛒 Bono primera compra</div>
@@ -186,7 +226,6 @@ const ConfiguracionPage = () => {
 
           <div style={styles.divider} />
 
-          {/* Cumpleaños */}
           <div style={styles.bonoRow}>
             <div style={styles.bonoInfo}>
               <div style={styles.bonoTitulo}>🎂 Bono de cumpleaños</div>
@@ -207,7 +246,6 @@ const ConfiguracionPage = () => {
               </div>
             </div>
           </div>
-
         </div>
       </div>
 
@@ -277,7 +315,6 @@ const ConfiguracionPage = () => {
         </div>
       </div>
 
-      {/* Botón guardar */}
       <button onClick={guardar} disabled={guardando} style={styles.btnGuardar}>
         {guardando ? 'Guardando...' : 'Guardar configuración'}
       </button>
