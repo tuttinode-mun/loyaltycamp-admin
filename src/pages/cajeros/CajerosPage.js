@@ -8,17 +8,34 @@ import { auth, db } from '../../firebase';
 import { COLECCIONES } from '../../constants';
 import Layout from '../../components/Layout';
 
+const PERMISOS_LISTA = [
+  { key: 'sumar_puntos', label: 'Sumar puntos', desc: 'Registrar compras y sumar puntos al cliente' },
+  { key: 'ver_canjes', label: 'Ver canjes', desc: 'Ver los premios disponibles del cliente' },
+  { key: 'ejecutar_canjes', label: 'Ejecutar canjes', desc: 'Procesar canjes de premios' },
+  { key: 'editar_cliente', label: 'Editar cliente', desc: 'Modificar datos del perfil del cliente' },
+  { key: 'ajuste_manual', label: 'Ajuste manual de puntos', desc: 'Agregar o quitar puntos manualmente' },
+  { key: 'ver_historial', label: 'Ver historial', desc: 'Ver transacciones anteriores' },
+];
+
+const PERMISOS_DEFAULT = {
+  sumar_puntos: true,
+  ver_canjes: true,
+  ejecutar_canjes: true,
+  editar_cliente: false,
+  ajuste_manual: false,
+  ver_historial: true,
+};
+
 const CajerosPage = () => {
   const [cajeros, setCajeros] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [mostrarForm, setMostrarForm] = useState(false);
   const [creando, setCreando] = useState(false);
+  const [editandoPermisos, setEditandoPermisos] = useState(null);
   const [form, setForm] = useState({
-    nombre: '',
-    apellido: '',
-    email: '',
-    password: '',
+    nombre: '', apellido: '', email: '', password: '',
     sucursal_id: 'st-hubert',
+    permisos: { ...PERMISOS_DEFAULT },
   });
 
   useEffect(() => {
@@ -46,57 +63,45 @@ const CajerosPage = () => {
     }
   };
 
+  const guardarPermisos = async (cajeroId, permisos) => {
+    try {
+      await updateDoc(doc(db, COLECCIONES.CAJEROS, cajeroId), { permisos });
+      setCajeros(prev => prev.map(c => c.id === cajeroId ? { ...c, permisos } : c));
+      setEditandoPermisos(null);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleCrear = async (e) => {
     e.preventDefault();
     setCreando(true);
     try {
-      // Crear usuario en Firebase Auth
       const credencial = await createUserWithEmailAndPassword(auth, form.email, form.password);
       const uid = credencial.user.uid;
-
-      // Crear rol
       await setDoc(doc(db, 'usuarios_roles', uid), {
-        uid,
-        rol: 'cajero',
-        creado_en: serverTimestamp(),
+        uid, rol: 'cajero', creado_en: serverTimestamp(),
       });
-
-      // Crear perfil cajero
       await setDoc(doc(db, COLECCIONES.CAJEROS, uid), {
-        uid,
-        email: form.email,
-        nombre: form.nombre,
-        apellido: form.apellido,
-        sucursal_id: form.sucursal_id,
-        permisos: {
-          sumar_puntos: true,
-          ver_canjes: true,
-          ejecutar_canjes: true,
-          editar_cliente: false,
-          ajuste_manual: false,
-          ver_historial: true,
-        },
-        activo: true,
-        ultimo_acceso: null,
-        creado_en: serverTimestamp(),
-        creado_por: auth.currentUser?.uid,
+        uid, email: form.email, nombre: form.nombre, apellido: form.apellido,
+        sucursal_id: form.sucursal_id, permisos: form.permisos,
+        activo: true, ultimo_acceso: null,
+        creado_en: serverTimestamp(), creado_por: auth.currentUser?.uid,
       });
-
       setMostrarForm(false);
-      setForm({ nombre: '', apellido: '', email: '', password: '', sucursal_id: 'st-hubert' });
+      setForm({ nombre: '', apellido: '', email: '', password: '', sucursal_id: 'st-hubert', permisos: { ...PERMISOS_DEFAULT } });
       cargarCajeros();
       alert('Cajero creado exitosamente');
     } catch (e) {
-      console.error(e);
-      alert('Error al crear cajero: ' + e.message);
+      alert('Error: ' + e.message);
     } finally {
       setCreando(false);
     }
   };
 
   const getSucursalLabel = (id) => {
-    const sucursales = { 'st-hubert': 'St-Hubert', 'st-laurent': 'St-Laurent', 'brossard': 'Brossard' };
-    return sucursales[id] || id;
+    const s = { 'st-hubert': 'St-Hubert', 'st-laurent': 'St-Laurent', 'brossard': 'Brossard' };
+    return s[id] || id;
   };
 
   return (
@@ -108,7 +113,7 @@ const CajerosPage = () => {
         </button>
       </div>
 
-      {/* Formulario */}
+      {/* Formulario crear */}
       {mostrarForm && (
         <div style={styles.formCard}>
           <h3 style={styles.formTitulo}>Crear nuevo cajero</h3>
@@ -123,8 +128,8 @@ const CajerosPage = () => {
                 <input style={styles.input} value={form.apellido} onChange={e => setForm({...form, apellido: e.target.value})} placeholder="Pérez" required />
               </div>
               <div style={styles.campo}>
-                <label style={styles.label}>Correo electrónico</label>
-                <input style={styles.input} type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="cajero.juan@loyaltycamp.com" required />
+                <label style={styles.label}>Correo</label>
+                <input style={styles.input} type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="cajero@loyaltycamp.com" required />
               </div>
               <div style={styles.campo}>
                 <label style={styles.label}>Contraseña</label>
@@ -139,10 +144,71 @@ const CajerosPage = () => {
                 </select>
               </div>
             </div>
+
+            {/* Permisos checklist */}
+            <div style={styles.permisosSection}>
+              <div style={styles.permisosTitulo}>Permisos del cajero</div>
+              <div style={styles.permisosGrid}>
+                {PERMISOS_LISTA.map(p => (
+                  <label key={p.key} style={styles.permisoItem}>
+                    <input
+                      type="checkbox"
+                      checked={form.permisos[p.key]}
+                      onChange={e => setForm({
+                        ...form,
+                        permisos: { ...form.permisos, [p.key]: e.target.checked }
+                      })}
+                      style={styles.checkbox}
+                    />
+                    <div>
+                      <div style={styles.permisoLabel}>{p.label}</div>
+                      <div style={styles.permisoDesc}>{p.desc}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <button type="submit" style={styles.btnGuardar} disabled={creando}>
               {creando ? 'Creando...' : 'Crear cajero'}
             </button>
           </form>
+        </div>
+      )}
+
+      {/* Modal editar permisos */}
+      {editandoPermisos && (
+        <div style={styles.modalOverlay} onClick={() => setEditandoPermisos(null)}>
+          <div style={styles.modal} onClick={e => e.stopPropagation()}>
+            <h3 style={styles.modalTitulo}>
+              Editar permisos — {editandoPermisos.nombre} {editandoPermisos.apellido}
+            </h3>
+            <div style={styles.permisosGrid}>
+              {PERMISOS_LISTA.map(p => (
+                <label key={p.key} style={styles.permisoItem}>
+                  <input
+                    type="checkbox"
+                    checked={editandoPermisos.permisos?.[p.key] || false}
+                    onChange={e => setEditandoPermisos({
+                      ...editandoPermisos,
+                      permisos: { ...editandoPermisos.permisos, [p.key]: e.target.checked }
+                    })}
+                    style={styles.checkbox}
+                  />
+                  <div>
+                    <div style={styles.permisoLabel}>{p.label}</div>
+                    <div style={styles.permisoDesc}>{p.desc}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div style={styles.modalBtns}>
+              <button onClick={() => setEditandoPermisos(null)} style={styles.btnCancelar}>Cancelar</button>
+              <button onClick={() => guardarPermisos(editandoPermisos.id, editandoPermisos.permisos)} style={styles.btnGuardar}>
+                Guardar permisos
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -159,9 +225,9 @@ const CajerosPage = () => {
                 <th style={styles.th}>Cajero</th>
                 <th style={styles.th}>Correo</th>
                 <th style={styles.th}>Sucursal</th>
-                <th style={styles.th}>Permisos</th>
+                <th style={styles.th}>Permisos activos</th>
                 <th style={styles.th}>Estado</th>
-                <th style={styles.th}>Acción</th>
+                <th style={styles.th}>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -172,18 +238,16 @@ const CajerosPage = () => {
                       <div style={styles.avatar}>
                         {cajero.nombre?.charAt(0)}{cajero.apellido?.charAt(0)}
                       </div>
-                      <div>
-                        <div style={styles.cajeroNombre}>{cajero.nombre} {cajero.apellido}</div>
-                      </div>
+                      <div style={styles.cajeroNombre}>{cajero.nombre} {cajero.apellido}</div>
                     </div>
                   </td>
                   <td style={styles.td}>{cajero.email}</td>
                   <td style={styles.td}>{getSucursalLabel(cajero.sucursal_id)}</td>
                   <td style={styles.td}>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {cajero.permisos?.sumar_puntos && <span style={styles.permisoPill}>Sumar pts</span>}
-                      {cajero.permisos?.ejecutar_canjes && <span style={styles.permisoPill}>Canjes</span>}
-                      {cajero.permisos?.ver_historial && <span style={styles.permisoPill}>Historial</span>}
+                    <div style={styles.permisosWrap}>
+                      {PERMISOS_LISTA.filter(p => cajero.permisos?.[p.key]).map(p => (
+                        <span key={p.key} style={styles.permisoPill}>{p.label}</span>
+                      ))}
                     </div>
                   </td>
                   <td style={styles.td}>
@@ -196,16 +260,24 @@ const CajerosPage = () => {
                     </span>
                   </td>
                   <td style={styles.td}>
-                    <button
-                      onClick={() => toggleActivo(cajero)}
-                      style={{
-                        ...styles.btnToggle,
-                        background: cajero.activo ? '#fef2f4' : '#dcfce7',
-                        color: cajero.activo ? '#C8102E' : '#15803d',
-                      }}
-                    >
-                      {cajero.activo ? 'Desactivar' : 'Activar'}
-                    </button>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={() => setEditandoPermisos({ ...cajero })}
+                        style={styles.btnEditar}
+                      >
+                        Permisos
+                      </button>
+                      <button
+                        onClick={() => toggleActivo(cajero)}
+                        style={{
+                          ...styles.btnToggle,
+                          background: cajero.activo ? '#fef2f4' : '#dcfce7',
+                          color: cajero.activo ? '#C8102E' : '#15803d',
+                        }}
+                      >
+                        {cajero.activo ? 'Desactivar' : 'Activar'}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -223,23 +295,37 @@ const styles = {
   btnNuevo: { padding: '10px 20px', background: '#C8102E', color: 'white', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' },
   formCard: { background: 'white', borderRadius: 14, padding: 24, marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
   formTitulo: { fontSize: 16, fontWeight: 700, color: '#0F0F0F', marginBottom: 16, marginTop: 0 },
-  formGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 16 },
-  campo: { marginBottom: 12 },
+  formGrid: { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 16 },
+  campo: {},
   label: { display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6B6B', marginBottom: 5 },
   input: { width: '100%', padding: '9px 12px', fontSize: 14, borderRadius: 8, border: '1.5px solid rgba(0,0,0,0.1)', background: '#F5F3F0', boxSizing: 'border-box', outline: 'none' },
+  permisosSection: { background: '#F5F3F0', borderRadius: 12, padding: 16, marginBottom: 16 },
+  permisosTitulo: { fontSize: 13, fontWeight: 700, color: '#0F0F0F', marginBottom: 12 },
+  permisosGrid: { display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10 },
+  permisoItem: { display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', background: 'white', borderRadius: 10, padding: 12 },
+  checkbox: { marginTop: 2, width: 16, height: 16, accentColor: '#C8102E', flexShrink: 0 },
+  permisoLabel: { fontSize: 13, fontWeight: 600, color: '#0F0F0F' },
+  permisoDesc: { fontSize: 11, color: '#6B6B6B', marginTop: 2 },
   btnGuardar: { padding: '11px 24px', background: '#C8102E', color: 'white', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' },
+  modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 },
+  modal: { background: 'white', borderRadius: 16, padding: 28, width: 560, maxWidth: '90vw' },
+  modalTitulo: { fontSize: 16, fontWeight: 700, color: '#0F0F0F', marginBottom: 16, marginTop: 0 },
+  modalBtns: { display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end' },
+  btnCancelar: { padding: '10px 20px', background: '#F5F3F0', color: '#6B6B6B', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
   card: { background: 'white', borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
   loading: { textAlign: 'center', padding: 40, color: '#6B6B6B' },
   tabla: { width: '100%', borderCollapse: 'collapse' },
   th: { textAlign: 'left', padding: '10px 14px', fontSize: 11, fontWeight: 600, color: '#6B6B6B', background: '#F5F3F0', borderBottom: '1px solid rgba(0,0,0,0.08)', textTransform: 'uppercase', letterSpacing: '0.05em' },
   tr: { borderBottom: '1px solid rgba(0,0,0,0.06)' },
-  td: { padding: '12px 14px', fontSize: 13, color: '#0F0F0F' },
+  td: { padding: '12px 14px', fontSize: 13, color: '#0F0F0F', verticalAlign: 'middle' },
   cajeroCell: { display: 'flex', alignItems: 'center', gap: 10 },
   avatar: { width: 36, height: 36, borderRadius: '50%', background: '#9e0a22', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 },
-  cajeroNombre: { fontSize: 13, fontWeight: 600, color: '#0F0F0F' },
+  cajeroNombre: { fontSize: 13, fontWeight: 600 },
+  permisosWrap: { display: 'flex', flexWrap: 'wrap', gap: 4 },
   permisoPill: { padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600, background: '#F5F3F0', color: '#6B6B6B' },
   estadoPill: { padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 },
-  btnToggle: { padding: '6px 14px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
+  btnEditar: { padding: '6px 12px', background: '#eff6ff', color: '#3b82f6', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' },
+  btnToggle: { padding: '6px 12px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
 };
 
 export default CajerosPage;
