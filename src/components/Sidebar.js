@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+
 const menuItems = [
   { path: '/', label: 'Dashboard', emoji: '📊' },
   { path: '/clientes', label: 'Clientes', emoji: '👥' },
@@ -11,6 +12,7 @@ const menuItems = [
   { path: '/sucursales', label: 'Sucursales', emoji: '🏪' },
   { path: '/exportar', label: 'Exportar datos', emoji: '📥' },
   { path: '/configuracion', label: 'Configuración', emoji: '⚙️' },
+  { path: '/ofertas', label: 'Ofertas puntos', emoji: '⭐' },
 ];
 
 const Sidebar = () => {

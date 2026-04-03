@@ -12,6 +12,9 @@ import CajerosPage from './pages/cajeros/CajerosPage';
 import SucursalesPage from './pages/sucursales/SucursalesPage';
 import ExportarPage from './pages/ExportarPage';
 import ConfiguracionPage from './pages/ConfiguracionPage';
+import OfertasPage from './pages/ofertas/OfertasPage';
+
+
 
 const ProtectedRoute = ({ children }) => {
   const { usuario, rol, cargando } = useAuth();
@@ -50,6 +53,7 @@ const AppRoutes = () => {
       <Route path="/sucursales" element={<ProtectedRoute><SucursalesPage /></ProtectedRoute>} />
       <Route path="/exportar" element={<ProtectedRoute><ExportarPage /></ProtectedRoute>} />
       <Route path="/configuracion" element={<ProtectedRoute><ConfiguracionPage /></ProtectedRoute>} />
+      <Route path="/ofertas" element={<ProtectedRoute><OfertasPage /></ProtectedRoute>} />
     </Routes>
   );
 };
