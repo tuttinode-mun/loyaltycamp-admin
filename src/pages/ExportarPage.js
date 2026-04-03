@@ -48,7 +48,7 @@ const ExportarPage = () => {
       if (filtros.puntos_max && (c.puntos_vigentes || 0) > parseInt(filtros.puntos_max)) return false;
 
       // Sucursal
-      if (filtros.sucursal && c.sucursal_favorita !== filtros.sucursal) return false;
+      if (filtros.sucursal && c.sucursal_favorita !== filtros.sucursal && c.sucursal_registro !== filtros.sucursal) return false;
 
       // Sin compras
       if (filtros.sin_compras && (c.total_visitas || 0) > 0) return false;

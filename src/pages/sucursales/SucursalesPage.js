@@ -7,17 +7,17 @@ import { db } from '../../firebase';
 import { COLECCIONES } from '../../constants';
 import Layout from '../../components/Layout';
 
+const FORM_DEFAULT = {
+  nombre: '', nombre_completo: '', direccion: '',
+  telefono: '', es_principal: false,
+};
+
 const SucursalesPage = () => {
   const [sucursales, setSucursales] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [mostrarForm, setMostrarForm] = useState(false);
-  const [form, setForm] = useState({
-    nombre: '',
-    nombre_completo: '',
-    direccion: '',
-    telefono: '',
-    es_principal: false,
-  });
+  const [editando, setEditando] = useState(null);
+  const [form, setForm] = useState({ ...FORM_DEFAULT });
 
   useEffect(() => {
     cargarSucursales();
@@ -44,33 +44,61 @@ const SucursalesPage = () => {
     }
   };
 
-  const handleCrear = async (e) => {
+  const abrirEditar = (sucursal) => {
+    setForm({
+      nombre: sucursal.nombre || '',
+      nombre_completo: sucursal.nombre_completo || '',
+      direccion: sucursal.direccion || '',
+      telefono: sucursal.telefono || '',
+      es_principal: sucursal.es_principal || false,
+    });
+    setEditando(sucursal);
+    setMostrarForm(true);
+  };
+
+  const cancelar = () => {
+    setMostrarForm(false);
+    setEditando(null);
+    setForm({ ...FORM_DEFAULT });
+  };
+
+  const handleGuardar = async (e) => {
     e.preventDefault();
+    const datos = {
+      nombre: form.nombre,
+      nombre_completo: form.nombre_completo || form.nombre,
+      direccion: form.direccion,
+      telefono: form.telefono,
+      es_principal: form.es_principal,
+    };
+
     try {
-      await addDoc(collection(db, COLECCIONES.SUCURSALES), {
-        nombre: form.nombre,
-        nombre_completo: form.nombre_completo || form.nombre,
-        direccion: form.direccion,
-        telefono: form.telefono,
-        es_principal: form.es_principal,
-        horario: {
-          lunes:    { abre: '09:00', cierra: '19:00', cerrado: false },
-          martes:   { abre: '09:00', cierra: '19:00', cerrado: false },
-          miercoles:{ abre: '09:00', cierra: '19:00', cerrado: false },
-          jueves:   { abre: '09:00', cierra: '21:00', cerrado: false },
-          viernes:  { abre: '09:00', cierra: '21:00', cerrado: false },
-          sabado:   { abre: '09:00', cierra: '19:00', cerrado: false },
-          domingo:  { abre: '09:00', cierra: '19:00', cerrado: false },
-        },
-        activo: true,
-        creado_en: serverTimestamp(),
-      });
-      setMostrarForm(false);
-      setForm({ nombre: '', nombre_completo: '', direccion: '', telefono: '', es_principal: false });
-      cargarSucursales();
+      if (editando) {
+        await updateDoc(doc(db, COLECCIONES.SUCURSALES, editando.id), datos);
+        setSucursales(prev => prev.map(s => s.id === editando.id ? { ...s, ...datos } : s));
+        alert('Sucursal actualizada correctamente');
+      } else {
+        await addDoc(collection(db, COLECCIONES.SUCURSALES), {
+          ...datos,
+          horario: {
+            lunes:     { abre: '09:00', cierra: '19:00', cerrado: false },
+            martes:    { abre: '09:00', cierra: '19:00', cerrado: false },
+            miercoles: { abre: '09:00', cierra: '19:00', cerrado: false },
+            jueves:    { abre: '09:00', cierra: '21:00', cerrado: false },
+            viernes:   { abre: '09:00', cierra: '21:00', cerrado: false },
+            sabado:    { abre: '09:00', cierra: '19:00', cerrado: false },
+            domingo:   { abre: '09:00', cierra: '19:00', cerrado: false },
+          },
+          activo: true,
+          creado_en: serverTimestamp(),
+        });
+        cargarSucursales();
+        alert('Sucursal creada correctamente');
+      }
+      cancelar();
     } catch (e) {
       console.error(e);
-      alert('Error al crear sucursal');
+      alert('Error al guardar sucursal');
     }
   };
 
@@ -78,15 +106,16 @@ const SucursalesPage = () => {
     <Layout titulo="Sucursales">
       <div style={styles.toolbar}>
         <span style={styles.contador}>{sucursales.length} sucursales</span>
-        <button onClick={() => setMostrarForm(!mostrarForm)} style={styles.btnNuevo}>
-          {mostrarForm ? 'Cancelar' : '+ Nueva sucursal'}
-        </button>
+        {!mostrarForm && (
+          <button onClick={() => setMostrarForm(true)} style={styles.btnNuevo}>+ Nueva sucursal</button>
+        )}
       </div>
 
+      {/* Formulario */}
       {mostrarForm && (
         <div style={styles.formCard}>
-          <h3 style={styles.formTitulo}>Nueva sucursal</h3>
-          <form onSubmit={handleCrear}>
+          <h3 style={styles.formTitulo}>{editando ? 'Editar sucursal' : 'Nueva sucursal'}</h3>
+          <form onSubmit={handleGuardar}>
             <div style={styles.formGrid}>
               <div style={styles.campo}>
                 <label style={styles.label}>Nombre corto</label>
@@ -111,18 +140,23 @@ const SucursalesPage = () => {
                 </label>
               </div>
             </div>
-            <button type="submit" style={styles.btnGuardar}>Crear sucursal</button>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button type="submit" style={styles.btnGuardar}>
+                {editando ? 'Guardar cambios' : 'Crear sucursal'}
+              </button>
+              <button type="button" onClick={cancelar} style={styles.btnCancelar}>Cancelar</button>
+            </div>
           </form>
         </div>
       )}
 
+      {/* Cards de sucursales */}
       {cargando ? (
         <div style={styles.loading}>Cargando sucursales...</div>
       ) : sucursales.length === 0 ? (
         <div style={styles.emptyCard}>
           <div style={styles.emptyEmoji}>🏪</div>
           <div style={styles.emptyTitulo}>No hay sucursales registradas</div>
-          <div style={styles.emptySub}>Crea las sucursales de tu negocio usando el botón de arriba</div>
         </div>
       ) : (
         <div style={styles.sucursalesGrid}>
@@ -169,17 +203,19 @@ const SucursalesPage = () => {
                 </div>
               )}
 
-              <button
-                onClick={() => toggleActivo(suc)}
-                style={{
-                  ...styles.btnToggle,
-                  background: suc.activo ? '#fef2f4' : '#dcfce7',
-                  color: suc.activo ? '#C8102E' : '#15803d',
-                  marginTop: 12,
-                }}
-              >
-                {suc.activo ? 'Desactivar sucursal' : 'Activar sucursal'}
-              </button>
+              <div style={styles.sucBtns}>
+                <button onClick={() => abrirEditar(suc)} style={styles.btnEditar}>Editar</button>
+                <button
+                  onClick={() => toggleActivo(suc)}
+                  style={{
+                    ...styles.btnToggle,
+                    background: suc.activo ? '#fef2f4' : '#dcfce7',
+                    color: suc.activo ? '#C8102E' : '#15803d',
+                  }}
+                >
+                  {suc.activo ? 'Desactivar' : 'Activar'}
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -194,17 +230,17 @@ const styles = {
   btnNuevo: { padding: '10px 20px', background: '#C8102E', color: 'white', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' },
   formCard: { background: 'white', borderRadius: 14, padding: 24, marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
   formTitulo: { fontSize: 16, fontWeight: 700, color: '#0F0F0F', marginBottom: 16, marginTop: 0 },
-  formGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 16 },
+  formGrid: { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 16 },
   campo: { marginBottom: 12 },
   label: { display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6B6B', marginBottom: 5 },
   input: { width: '100%', padding: '9px 12px', fontSize: 14, borderRadius: 8, border: '1.5px solid rgba(0,0,0,0.1)', background: '#F5F3F0', boxSizing: 'border-box', outline: 'none' },
   btnGuardar: { padding: '11px 24px', background: '#C8102E', color: 'white', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' },
+  btnCancelar: { padding: '11px 24px', background: '#F5F3F0', color: '#6B6B6B', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
   loading: { textAlign: 'center', padding: 40, color: '#6B6B6B' },
   emptyCard: { background: 'white', borderRadius: 14, padding: 60, textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
   emptyEmoji: { fontSize: 48, marginBottom: 12 },
-  emptyTitulo: { fontSize: 16, fontWeight: 700, color: '#0F0F0F', marginBottom: 8 },
-  emptySub: { fontSize: 13, color: '#6B6B6B' },
-  sucursalesGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 },
+  emptyTitulo: { fontSize: 16, fontWeight: 700, color: '#0F0F0F' },
+  sucursalesGrid: { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 },
   sucCard: { background: 'white', borderRadius: 14, padding: 18, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
   sucHeader: { display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 },
   sucIcon: { fontSize: 28, flexShrink: 0 },
@@ -215,13 +251,15 @@ const styles = {
   estadoPill: { padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, flexShrink: 0 },
   sucDetalle: { display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#0F0F0F', marginBottom: 10 },
   sucDetalleLabel: { color: '#6B6B6B' },
-  horarioWrap: { background: '#F5F3F0', borderRadius: 10, padding: 10 },
+  horarioWrap: { background: '#F5F3F0', borderRadius: 10, padding: 10, marginBottom: 12 },
   horarioTitulo: { fontSize: 11, fontWeight: 700, color: '#6B6B6B', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 },
   horarioGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 },
   horarioDia: { display: 'flex', justifyContent: 'space-between', fontSize: 11 },
   diaLabel: { color: '#6B6B6B', fontWeight: 600 },
   diaHoras: { color: '#0F0F0F' },
-  btnToggle: { width: '100%', padding: '8px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
+  sucBtns: { display: 'flex', gap: 8 },
+  btnEditar: { flex: 1, padding: '8px', background: '#eff6ff', color: '#3b82f6', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' },
+  btnToggle: { flex: 1, padding: '8px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
 };
 
 export default SucursalesPage;

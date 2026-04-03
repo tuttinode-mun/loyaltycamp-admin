@@ -1,18 +1,24 @@
 import React, { useEffect, useState } from 'react';
-import { collection, getDocs, query, orderBy, doc, updateDoc, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import {
+  collection, getDocs, query, orderBy,
+  doc, updateDoc, addDoc, serverTimestamp, Timestamp
+} from 'firebase/firestore';
 import { db } from '../../firebase';
 import { COLECCIONES } from '../../constants';
 import Layout from '../../components/Layout';
+
+const FORM_DEFAULT = {
+  nombre: '', marca: '', tipo: 'precio',
+  precio_normal: '', precio_promo: '',
+  fecha_fin: '', sucursales: 'todas',
+};
 
 const PromocionesPage = () => {
   const [promociones, setPromociones] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [mostrarForm, setMostrarForm] = useState(false);
-  const [form, setForm] = useState({
-    nombre: '', marca: '', tipo: 'precio',
-    precio_normal: '', precio_promo: '',
-    fecha_fin: '', sucursales: 'todas',
-  });
+  const [editando, setEditando] = useState(null);
+  const [form, setForm] = useState({ ...FORM_DEFAULT });
 
   useEffect(() => {
     cargarPromociones();
@@ -39,7 +45,29 @@ const PromocionesPage = () => {
     }
   };
 
-  const handleCrear = async (e) => {
+  const abrirEditar = (promo) => {
+    const fechaFin = promo.fecha_fin?.toDate ? promo.fecha_fin.toDate() : new Date(promo.fecha_fin);
+    const fechaStr = fechaFin.toISOString().slice(0, 10);
+    setForm({
+      nombre: promo.nombre || '',
+      marca: promo.marca || '',
+      tipo: promo.tipo || 'precio',
+      precio_normal: promo.precio_normal || '',
+      precio_promo: promo.precio_promo || '',
+      fecha_fin: fechaStr,
+      sucursales: promo.sucursales?.[0] || 'todas',
+    });
+    setEditando(promo);
+    setMostrarForm(true);
+  };
+
+  const cancelar = () => {
+    setMostrarForm(false);
+    setEditando(null);
+    setForm({ ...FORM_DEFAULT });
+  };
+
+  const handleGuardar = async (e) => {
     e.preventDefault();
     try {
       const pNormal = parseFloat(form.precio_normal);
@@ -47,26 +75,35 @@ const PromocionesPage = () => {
       const pct = pNormal > 0 ? Math.round(((pNormal - pPromo) / pNormal) * 100) : 0;
       const fechaFin = Timestamp.fromDate(new Date(form.fecha_fin));
 
-      await addDoc(collection(db, COLECCIONES.PROMOCIONES), {
+      const datos = {
         nombre: form.nombre,
         marca: form.marca,
         tipo: form.tipo,
         precio_normal: pNormal,
         precio_promo: pPromo,
         porcentaje_descuento: pct,
-        fecha_inicio: serverTimestamp(),
         fecha_fin: fechaFin,
         sucursales: [form.sucursales],
         activo: true,
-        creado_en: serverTimestamp(),
-      });
+      };
 
-      setMostrarForm(false);
-      setForm({ nombre: '', marca: '', tipo: 'precio', precio_normal: '', precio_promo: '', fecha_fin: '', sucursales: 'todas' });
-      cargarPromociones();
+      if (editando) {
+        await updateDoc(doc(db, COLECCIONES.PROMOCIONES, editando.id), datos);
+        setPromociones(prev => prev.map(p => p.id === editando.id ? { ...p, ...datos } : p));
+        alert('Promoción actualizada correctamente');
+      } else {
+        await addDoc(collection(db, COLECCIONES.PROMOCIONES), {
+          ...datos,
+          fecha_inicio: serverTimestamp(),
+          creado_en: serverTimestamp(),
+        });
+        cargarPromociones();
+        alert('Promoción creada correctamente');
+      }
+      cancelar();
     } catch (e) {
       console.error(e);
-      alert('Error al crear promoción');
+      alert('Error al guardar promoción');
     }
   };
 
@@ -79,24 +116,23 @@ const PromocionesPage = () => {
   const getDiasRestantes = (timestamp) => {
     if (!timestamp) return null;
     const fin = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    const diff = Math.ceil((fin - new Date()) / (1000 * 60 * 60 * 24));
-    return diff;
+    return Math.ceil((fin - new Date()) / (1000 * 60 * 60 * 24));
   };
 
   return (
     <Layout titulo="Promociones">
       <div style={styles.toolbar}>
         <span style={styles.contador}>{promociones.length} promociones</span>
-        <button onClick={() => setMostrarForm(!mostrarForm)} style={styles.btnNueva}>
-          {mostrarForm ? 'Cancelar' : '+ Nueva promoción'}
-        </button>
+        {!mostrarForm && (
+          <button onClick={() => setMostrarForm(true)} style={styles.btnNuevo}>+ Nueva promoción</button>
+        )}
       </div>
 
       {/* Formulario */}
       {mostrarForm && (
         <div style={styles.formCard}>
-          <h3 style={styles.formTitulo}>Nueva promoción</h3>
-          <form onSubmit={handleCrear}>
+          <h3 style={styles.formTitulo}>{editando ? 'Editar promoción' : 'Nueva promoción'}</h3>
+          <form onSubmit={handleGuardar}>
             <div style={styles.formGrid}>
               <div style={styles.campo}>
                 <label style={styles.label}>Nombre del producto</label>
@@ -136,7 +172,12 @@ const PromocionesPage = () => {
                 </select>
               </div>
             </div>
-            <button type="submit" style={styles.btnGuardar}>Crear promoción</button>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button type="submit" style={styles.btnGuardar}>
+                {editando ? 'Guardar cambios' : 'Crear promoción'}
+              </button>
+              <button type="button" onClick={cancelar} style={styles.btnCancelar}>Cancelar</button>
+            </div>
           </form>
         </div>
       )}
@@ -156,7 +197,7 @@ const PromocionesPage = () => {
                 <th style={styles.th}>Válido hasta</th>
                 <th style={styles.th}>Sucursal</th>
                 <th style={styles.th}>Estado</th>
-                <th style={styles.th}>Acción</th>
+                <th style={styles.th}>Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -192,16 +233,19 @@ const PromocionesPage = () => {
                       </span>
                     </td>
                     <td style={styles.td}>
-                      <button
-                        onClick={() => toggleActivo(promo)}
-                        style={{
-                          ...styles.btnToggle,
-                          background: promo.activo ? '#fef2f4' : '#dcfce7',
-                          color: promo.activo ? '#C8102E' : '#15803d',
-                        }}
-                      >
-                        {promo.activo ? 'Desactivar' : 'Activar'}
-                      </button>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={() => abrirEditar(promo)} style={styles.btnEditar}>Editar</button>
+                        <button
+                          onClick={() => toggleActivo(promo)}
+                          style={{
+                            ...styles.btnToggle,
+                            background: promo.activo ? '#fef2f4' : '#dcfce7',
+                            color: promo.activo ? '#C8102E' : '#15803d',
+                          }}
+                        >
+                          {promo.activo ? 'Desactivar' : 'Activar'}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -217,25 +261,27 @@ const PromocionesPage = () => {
 const styles = {
   toolbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   contador: { fontSize: 13, color: '#6B6B6B' },
-  btnNueva: { padding: '10px 20px', background: '#C8102E', color: 'white', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' },
+  btnNuevo: { padding: '10px 20px', background: '#C8102E', color: 'white', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' },
   formCard: { background: 'white', borderRadius: 14, padding: 24, marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
   formTitulo: { fontSize: 16, fontWeight: 700, color: '#0F0F0F', marginBottom: 16, marginTop: 0 },
-  formGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 16 },
+  formGrid: { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 16 },
   campo: {},
   label: { display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6B6B', marginBottom: 5 },
   input: { width: '100%', padding: '9px 12px', fontSize: 14, borderRadius: 8, border: '1.5px solid rgba(0,0,0,0.1)', background: '#F5F3F0', boxSizing: 'border-box', outline: 'none' },
   btnGuardar: { padding: '11px 24px', background: '#C8102E', color: 'white', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' },
+  btnCancelar: { padding: '11px 24px', background: '#F5F3F0', color: '#6B6B6B', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
   card: { background: 'white', borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
   loading: { textAlign: 'center', padding: 40, color: '#6B6B6B' },
   tabla: { width: '100%', borderCollapse: 'collapse' },
   th: { textAlign: 'left', padding: '10px 14px', fontSize: 11, fontWeight: 600, color: '#6B6B6B', background: '#F5F3F0', borderBottom: '1px solid rgba(0,0,0,0.08)', textTransform: 'uppercase', letterSpacing: '0.05em' },
   tr: { borderBottom: '1px solid rgba(0,0,0,0.06)' },
-  td: { padding: '12px 14px', fontSize: 13, color: '#0F0F0F' },
+  td: { padding: '12px 14px', fontSize: 13, color: '#0F0F0F', verticalAlign: 'middle' },
   promoNombre: { fontSize: 13, fontWeight: 600 },
   promoMarca: { fontSize: 11, color: '#6B6B6B', marginTop: 2 },
   pctPill: { padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#fef2f4', color: '#C8102E' },
   estadoPill: { padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 },
-  btnToggle: { padding: '6px 14px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
+  btnEditar: { padding: '6px 12px', background: '#eff6ff', color: '#3b82f6', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' },
+  btnToggle: { padding: '6px 12px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
 };
 
 export default PromocionesPage;

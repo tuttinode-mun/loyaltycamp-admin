@@ -139,6 +139,47 @@ const ClienteDetallePage = ({ clienteId, onCerrar }) => {
                 <span style={styles.datoLabel}>Total comprado</span>
                 <span style={styles.datoVal}>${(cliente.total_comprado || 0).toFixed(2)}</span>
               </div>
+              <div style={styles.datoRow}>
+                <span style={styles.datoLabel}>Sucursal favorita</span>
+                <span style={styles.datoVal}>{cliente.sucursal_favorita || '—'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Preferencias de comunicación */}
+          <div style={styles.seccion}>
+            <div style={styles.seccionTitulo}>Preferencias de comunicación</div>
+            <div style={styles.datosGrid}>
+              <div style={styles.datoRow}>
+                <span style={styles.datoLabel}>📱 SMS</span>
+                <span style={{
+                  ...styles.datoVal,
+                  color: cliente.acepta_sms !== false ? '#15803d' : '#C8102E',
+                  fontWeight: 700,
+                }}>
+                  {cliente.acepta_sms !== false ? '✓ Activo' : '✗ No acepta'}
+                </span>
+              </div>
+              <div style={styles.datoRow}>
+                <span style={styles.datoLabel}>📧 Correo electrónico</span>
+                <span style={{
+                  ...styles.datoVal,
+                  color: cliente.acepta_email_marketing !== false ? '#15803d' : '#C8102E',
+                  fontWeight: 700,
+                }}>
+                  {cliente.acepta_email_marketing !== false ? '✓ Activo' : '✗ No acepta'}
+                </span>
+              </div>
+              <div style={{ ...styles.datoRow, borderBottomWidth: 0 }}>
+                <span style={styles.datoLabel}>🔔 Notificaciones push</span>
+                <span style={{
+                  ...styles.datoVal,
+                  color: cliente.acepta_push !== false ? '#15803d' : '#C8102E',
+                  fontWeight: 700,
+                }}>
+                  {cliente.acepta_push !== false ? '✓ Activo' : '✗ No acepta'}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -205,7 +246,7 @@ const styles = {
   datosGrid: { background: '#F5F3F0', borderRadius: 12, overflow: 'hidden' },
   datoRow: { display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid rgba(0,0,0,0.06)' },
   datoLabel: { fontSize: 13, color: '#6B6B6B' },
-  datoVal: { fontSize: 13, color: '#0F0F0F', fontWeight: 500 },
+  datoVal: { fontSize: 13, color: '#0F0F0F', fontWeight: 500, flex: 1, textAlign: 'right' },
   emptyTrans: { textAlign: 'center', padding: 20, color: '#6B6B6B', fontSize: 13 },
   transList: { display: 'flex', flexDirection: 'column', gap: 8 },
   txRow: { display: 'flex', alignItems: 'center', gap: 12, background: '#F5F3F0', borderRadius: 10, padding: 12 },
