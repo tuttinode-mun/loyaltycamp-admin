@@ -17,7 +17,7 @@ import OfertasPage from './pages/ofertas/OfertasPage';
 
 
 const ProtectedRoute = ({ children }) => {
-  const { usuario, rol, cargando } = useAuth();
+  const { usuario, cargando } = useAuth();
 
   if (cargando) return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#C8102E' }}>
@@ -25,7 +25,7 @@ const ProtectedRoute = ({ children }) => {
     </div>
   );
 
-  if (!usuario || (rol !== 'admin' && rol !== 'cajero')) {
+  if (!usuario) {
     return <Navigate to="/login" />;
   }
 
@@ -33,7 +33,7 @@ const ProtectedRoute = ({ children }) => {
 };
 
 const AppRoutes = () => {
-  const { usuario, rol, cargando } = useAuth();
+  const { usuario, cargando } = useAuth();
 
   if (cargando) return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#C8102E' }}>

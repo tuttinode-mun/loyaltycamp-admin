@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { COLECCIONES } from '../constants';
 import Layout from '../components/Layout';
