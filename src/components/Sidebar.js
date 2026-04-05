@@ -13,6 +13,7 @@ const menuItems = [
   { path: '/exportar', label: 'Exportar datos', emoji: '📥' },
   { path: '/configuracion', label: 'Configuración', emoji: '⚙️' },
   { path: '/ofertas', label: 'Ofertas puntos', emoji: '⭐' },
+  { path: '/logs', label: 'Log actividad', emoji: '📋' },
 ];
 
 const Sidebar = () => {
