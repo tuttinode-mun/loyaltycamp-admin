@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { COLECCIONES } from '../../constants';
 import Layout from '../../components/Layout';
+import { useAuth } from '../../context/AuthContext';
 import ClienteDetallePage from './ClienteDetallePage';
 
 const ClientesPage = () => {
+  const { tenantId } = useAuth();
   const [clientes, setClientes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState('');
@@ -13,9 +15,14 @@ const ClientesPage = () => {
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
 
   useEffect(() => {
+    if (!tenantId) return;
     const cargarClientes = async () => {
       try {
-        const q = query(collection(db, COLECCIONES.CLIENTES), orderBy('creado_en', 'desc'));
+        const q = query(
+          collection(db, COLECCIONES.CLIENTES),
+          where('tenant_id', '==', tenantId),
+          orderBy('creado_en', 'desc')
+        );
         const snap = await getDocs(q);
         setClientes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       } catch (e) {
@@ -25,7 +32,7 @@ const ClientesPage = () => {
       }
     };
     cargarClientes();
-  }, []);
+  }, [tenantId]);
 
   const clientesFiltrados = clientes.filter(c => {
     const b = busqueda.toLowerCase().trim();
@@ -76,7 +83,6 @@ const ClientesPage = () => {
 
   return (
     <Layout titulo="Clientes">
-      {/* Barra de herramientas */}
       <div style={styles.toolbar}>
         <div style={styles.toolbarLeft}>
           <div style={styles.searchWrap}>
@@ -92,11 +98,7 @@ const ClientesPage = () => {
               <button onClick={() => setBusqueda('')} style={styles.clearBtn}>✕</button>
             )}
           </div>
-          <select
-            style={styles.filtroNivel}
-            value={filtroNivel}
-            onChange={e => setFiltroNivel(e.target.value)}
-          >
+          <select style={styles.filtroNivel} value={filtroNivel} onChange={e => setFiltroNivel(e.target.value)}>
             <option value="">Todos los niveles</option>
             <option value="bronce">Bronce</option>
             <option value="oro">Oro</option>
@@ -109,12 +111,11 @@ const ClientesPage = () => {
         </div>
       </div>
 
-      {/* Tabla */}
       <div style={styles.card}>
         {cargando ? (
           <div style={styles.loading}>Cargando clientes...</div>
         ) : clientesFiltrados.length === 0 ? (
-          <div style={styles.loading}>No se encontraron clientes con ese criterio</div>
+          <div style={styles.loading}>No se encontraron clientes</div>
         ) : (
           <table style={styles.tabla}>
             <thead>
@@ -144,25 +145,15 @@ const ClientesPage = () => {
                     </div>
                   </td>
                   <td style={styles.td}>{cliente.telefono}</td>
+                  <td style={styles.td}><span style={styles.codigo}>{cliente.codigo}</span></td>
                   <td style={styles.td}>
-                    <span style={styles.codigo}>{cliente.codigo}</span>
-                  </td>
-                  <td style={styles.td}>
-                    <span style={{
-                      ...styles.nivelPill,
-                      background: getNivelBg(cliente.nivel),
-                      color: getNivelColor(cliente.nivel),
-                    }}>
+                    <span style={{ ...styles.nivelPill, background: getNivelBg(cliente.nivel), color: getNivelColor(cliente.nivel) }}>
                       {cliente.nivel?.charAt(0).toUpperCase() + cliente.nivel?.slice(1)}
                     </span>
                   </td>
-                  <td style={{ ...styles.td, fontWeight: 700 }}>
-                    {(cliente.puntos_vigentes || 0).toLocaleString()}
-                  </td>
+                  <td style={{ ...styles.td, fontWeight: 700 }}>{(cliente.puntos_vigentes || 0).toLocaleString()}</td>
                   <td style={styles.td}>{cliente.total_visitas || 0}</td>
-                  <td style={{ ...styles.td, color: cliente.ultima_compra ? '#0F0F0F' : '#aaa' }}>
-                    {formatearFecha(cliente.ultima_compra)}
-                  </td>
+                  <td style={{ ...styles.td, color: cliente.ultima_compra ? '#0F0F0F' : '#aaa' }}>{formatearFecha(cliente.ultima_compra)}</td>
                   <td style={styles.td}>{formatearFecha(cliente.creado_en)}</td>
                 </tr>
               ))}
@@ -170,12 +161,13 @@ const ClientesPage = () => {
           </table>
         )}
       </div>
+
       {clienteSeleccionado && (
-  <ClienteDetallePage
-    clienteId={clienteSeleccionado}
-    onCerrar={() => setClienteSeleccionado(null)}
-  />
-)}
+        <ClienteDetallePage
+          clienteId={clienteSeleccionado}
+          onCerrar={() => setClienteSeleccionado(null)}
+        />
+      )}
     </Layout>
   );
 };

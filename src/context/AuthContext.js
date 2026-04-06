@@ -9,6 +9,7 @@ const AuthContext = createContext(null);
 export const AuthProvider = ({ children }) => {
   const [usuario, setUsuario] = useState(null);
   const [rol, setRol] = useState(null);
+  const [tenantId, setTenantId] = useState(null);
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
@@ -17,8 +18,9 @@ export const AuthProvider = ({ children }) => {
         try {
           const rolSnap = await getDoc(doc(db, COLECCIONES.USUARIOS_ROLES, user.uid));
           if (rolSnap.exists()) {
-            const rolUsuario = rolSnap.data().rol;
-            setRol(rolUsuario);
+            const data = rolSnap.data();
+            setRol(data.rol);
+            setTenantId(data.tenant_id || 'sabor-latino');
             setUsuario(user);
           } else {
             await signOut(auth);
@@ -29,6 +31,7 @@ export const AuthProvider = ({ children }) => {
       } else {
         setUsuario(null);
         setRol(null);
+        setTenantId(null);
       }
       setCargando(false);
     });
@@ -40,7 +43,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ usuario, rol, cargando, cerrarSesion }}>
+    <AuthContext.Provider value={{ usuario, rol, tenantId, cargando, cerrarSesion }}>
       {children}
     </AuthContext.Provider>
   );

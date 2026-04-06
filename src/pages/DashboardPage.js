@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { COLECCIONES } from '../constants';
 import Layout from '../components/Layout';
+import { useAuth } from '../context/AuthContext';
 
 const StatCard = ({ titulo, valor, emoji, color }) => (
   <div style={{ ...styles.statCard, borderLeft: `4px solid ${color}` }}>
@@ -13,6 +14,7 @@ const StatCard = ({ titulo, valor, emoji, color }) => (
 );
 
 const DashboardPage = () => {
+  const { tenantId } = useAuth();
   const [stats, setStats] = useState({
     totalClientes: 0,
     totalTransacciones: 0,
@@ -23,23 +25,30 @@ const DashboardPage = () => {
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
+    if (!tenantId) return;
     const cargarDatos = async () => {
       try {
         // Clientes
-        const clientesSnap = await getDocs(collection(db, COLECCIONES.CLIENTES));
+        const clientesSnap = await getDocs(
+          query(collection(db, COLECCIONES.CLIENTES), where('tenant_id', '==', tenantId))
+        );
         const clientes = clientesSnap.docs.map(d => d.data());
         const totalPuntos = clientes.reduce((acc, c) => acc + (c.puntos_vigentes || 0), 0);
 
         // Transacciones
-        const transSnap = await getDocs(collection(db, COLECCIONES.TRANSACCIONES));
+        const transSnap = await getDocs(
+          query(collection(db, COLECCIONES.TRANSACCIONES), where('tenant_id', '==', tenantId))
+        );
 
         // Transacciones recientes
-        const transRecientesQ = query(
-          collection(db, COLECCIONES.TRANSACCIONES),
-          orderBy('creado_en', 'desc'),
-          limit(10)
+        const transRecientesSnap = await getDocs(
+          query(
+            collection(db, COLECCIONES.TRANSACCIONES),
+            where('tenant_id', '==', tenantId),
+            orderBy('creado_en', 'desc'),
+            limit(10)
+          )
         );
-        const transRecientesSnap = await getDocs(transRecientesQ);
 
         setStats({
           totalClientes: clientes.length,
@@ -61,7 +70,7 @@ const DashboardPage = () => {
       }
     };
     cargarDatos();
-  }, []);
+  }, [tenantId]);
 
   const formatearFecha = (timestamp) => {
     if (!timestamp) return '';
