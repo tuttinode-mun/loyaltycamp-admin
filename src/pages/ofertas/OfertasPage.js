@@ -28,7 +28,8 @@ const OfertasPage = () => {
   const [editando, setEditando] = useState(null);
   const [form, setForm] = useState({ ...FORM_DEFAULT });
 
-  useEffect(() => {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => {
     if (!tenantId) return;
     cargarOfertas();
   }, [tenantId]);

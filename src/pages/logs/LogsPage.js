@@ -12,6 +12,7 @@ const LogsPage = () => {
   const [filtroOrigen, setFiltroOrigen] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!tenantId) return;
     cargarLogs();

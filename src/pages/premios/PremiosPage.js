@@ -25,6 +25,7 @@ const PremiosPage = () => {
   const [editando, setEditando] = useState(null);
   const [form, setForm] = useState({ ...FORM_DEFAULT });
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!tenantId) return;
     cargarPremios();
