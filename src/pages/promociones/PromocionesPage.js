@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
-  collection, getDocs, query, orderBy,
+  collection, getDocs, query, orderBy, where,
   doc, updateDoc, addDoc, serverTimestamp, Timestamp
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { COLECCIONES } from '../../constants';
 import Layout from '../../components/Layout';
+import { useAuth } from '../../context/AuthContext';
 
 const FORM_DEFAULT = {
   nombre: '', marca: '', tipo: 'precio',
@@ -14,6 +15,7 @@ const FORM_DEFAULT = {
 };
 
 const PromocionesPage = () => {
+  const { tenantId } = useAuth();
   const [promociones, setPromociones] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [mostrarForm, setMostrarForm] = useState(false);
@@ -21,12 +23,17 @@ const PromocionesPage = () => {
   const [form, setForm] = useState({ ...FORM_DEFAULT });
 
   useEffect(() => {
+    if (!tenantId) return;
     cargarPromociones();
-  }, []);
+  }, [tenantId]);
 
   const cargarPromociones = async () => {
     try {
-      const q = query(collection(db, COLECCIONES.PROMOCIONES), orderBy('fecha_fin', 'asc'));
+      const q = query(
+        collection(db, COLECCIONES.PROMOCIONES),
+        where('tenant_id', '==', tenantId),
+        orderBy('fecha_fin', 'asc')
+      );
       const snap = await getDocs(q);
       setPromociones(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (e) {
@@ -76,6 +83,7 @@ const PromocionesPage = () => {
       const fechaFin = Timestamp.fromDate(new Date(form.fecha_fin));
 
       const datos = {
+        tenant_id: tenantId,
         nombre: form.nombre,
         marca: form.marca,
         tipo: form.tipo,
@@ -128,7 +136,6 @@ const PromocionesPage = () => {
         )}
       </div>
 
-      {/* Formulario */}
       {mostrarForm && (
         <div style={styles.formCard}>
           <h3 style={styles.formTitulo}>{editando ? 'Editar promoción' : 'Nueva promoción'}</h3>
@@ -182,7 +189,6 @@ const PromocionesPage = () => {
         </div>
       )}
 
-      {/* Tabla */}
       <div style={styles.card}>
         {cargando ? (
           <div style={styles.loading}>Cargando promociones...</div>

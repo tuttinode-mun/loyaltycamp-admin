@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import Layout from '../../components/Layout';
+import { useAuth } from '../../context/AuthContext';
 
 const LogsPage = () => {
+  const { tenantId } = useAuth();
   const [logs, setLogs] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [filtroNivel, setFiltroNivel] = useState('');
@@ -11,13 +13,15 @@ const LogsPage = () => {
   const [filtroTipo, setFiltroTipo] = useState('');
 
   useEffect(() => {
+    if (!tenantId) return;
     cargarLogs();
-  }, []);
+  }, [tenantId]);
 
   const cargarLogs = async () => {
     try {
       const q = query(
         collection(db, 'logs'),
+        where('tenant_id', '==', tenantId),
         orderBy('creado_en', 'desc'),
         limit(200)
       );
@@ -63,7 +67,6 @@ const LogsPage = () => {
 
   return (
     <Layout titulo="Log de actividad">
-      {/* Filtros */}
       <div style={styles.toolbar}>
         <div style={styles.filtros}>
           <select style={styles.filtro} value={filtroNivel} onChange={e => setFiltroNivel(e.target.value)}>
@@ -96,7 +99,6 @@ const LogsPage = () => {
         <span style={styles.contador}>{logsFiltrados.length} registros</span>
       </div>
 
-      {/* Tabla */}
       <div style={styles.card}>
         {cargando ? (
           <div style={styles.loading}>Cargando logs...</div>

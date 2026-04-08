@@ -1,19 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import {
-  collection, getDocs, query, orderBy,
+  collection, getDocs, query, orderBy, where,
   doc, updateDoc, addDoc, serverTimestamp, Timestamp
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import Layout from '../../components/Layout';
+import { useAuth } from '../../context/AuthContext';
 
 const FORM_DEFAULT = {
-  nombre: '',
-  descripcion: '',
-  multiplicador: 2,
-  fecha_inicio: '',
-  fecha_fin: '',
-  hora_inicio: '',
-  hora_fin: '',
+  nombre: '', descripcion: '', multiplicador: 2,
+  fecha_inicio: '', fecha_fin: '',
+  hora_inicio: '', hora_fin: '',
   todos_los_dias: true,
   dias: {
     lunes: true, martes: true, miercoles: true,
@@ -24,6 +21,7 @@ const FORM_DEFAULT = {
 };
 
 const OfertasPage = () => {
+  const { tenantId } = useAuth();
   const [ofertas, setOfertas] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [mostrarForm, setMostrarForm] = useState(false);
@@ -31,12 +29,17 @@ const OfertasPage = () => {
   const [form, setForm] = useState({ ...FORM_DEFAULT });
 
   useEffect(() => {
+    if (!tenantId) return;
     cargarOfertas();
-  }, []);
+  }, [tenantId]);
 
   const cargarOfertas = async () => {
     try {
-      const q = query(collection(db, 'ofertas_puntos'), orderBy('fecha_inicio', 'desc'));
+      const q = query(
+        collection(db, 'ofertas_puntos'),
+        where('tenant_id', '==', tenantId),
+        orderBy('fecha_inicio', 'desc')
+      );
       const snap = await getDocs(q);
       setOfertas(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (e) {
@@ -106,6 +109,7 @@ const OfertasPage = () => {
     }
 
     const datos = {
+      tenant_id: tenantId,
       nombre: form.nombre,
       descripcion: form.descripcion,
       multiplicador: parseFloat(form.multiplicador),
@@ -170,10 +174,10 @@ const OfertasPage = () => {
               </div>
               <div style={styles.campo}>
                 <label style={styles.label}>Descripción</label>
-                <input style={styles.input} value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} placeholder="Gana el doble de puntos en todas tus compras" />
+                <input style={styles.input} value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} placeholder="Gana el doble de puntos" />
               </div>
               <div style={styles.campo}>
-                <label style={styles.label}>Multiplicador de puntos *</label>
+                <label style={styles.label}>Multiplicador *</label>
                 <select style={styles.input} value={form.multiplicador} onChange={e => setForm({...form, multiplicador: parseFloat(e.target.value)})}>
                   <option value={1.5}>×1.5 — 50% más puntos</option>
                   <option value={2}>×2 — Doble puntos</option>
@@ -200,7 +204,6 @@ const OfertasPage = () => {
               </div>
             </div>
 
-            {/* Horario */}
             <div style={styles.seccion}>
               <div style={styles.seccionTitulo}>Horario de la oferta</div>
               <div style={{ display: 'flex', gap: 14, marginBottom: 12 }}>
@@ -218,7 +221,6 @@ const OfertasPage = () => {
               </p>
             </div>
 
-            {/* Días */}
             <div style={styles.seccion}>
               <div style={styles.seccionTitulo}>Días de la semana</div>
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 10, cursor: 'pointer' }}>
@@ -241,7 +243,6 @@ const OfertasPage = () => {
               )}
             </div>
 
-            {/* Niveles */}
             <div style={styles.seccion}>
               <div style={styles.seccionTitulo}>Niveles habilitados</div>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -268,7 +269,6 @@ const OfertasPage = () => {
         </div>
       )}
 
-      {/* Tabla */}
       <div style={styles.card}>
         {cargando ? (
           <div style={styles.loading}>Cargando ofertas...</div>
@@ -284,7 +284,6 @@ const OfertasPage = () => {
                 <th style={styles.th}>Horario</th>
                 <th style={styles.th}>Días</th>
                 <th style={styles.th}>Sucursal</th>
-                <th style={styles.th}>Niveles</th>
                 <th style={styles.th}>Estado</th>
                 <th style={styles.th}>Acciones</th>
               </tr>
@@ -318,13 +317,6 @@ const OfertasPage = () => {
                     }
                   </td>
                   <td style={styles.td}>{oferta.sucursales?.join(', ')}</td>
-                  <td style={styles.td}>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {oferta.niveles?.map(n => (
-                        <span key={n} style={styles.nivelPill}>{n}</span>
-                      ))}
-                    </div>
-                  </td>
                   <td style={styles.td}>
                     <span style={{
                       ...styles.estadoPill,
@@ -382,7 +374,6 @@ const styles = {
   tr: { borderBottom: '1px solid rgba(0,0,0,0.06)' },
   td: { padding: '12px 14px', fontSize: 13, color: '#0F0F0F', verticalAlign: 'middle' },
   multPill: { padding: '4px 12px', borderRadius: 20, fontSize: 13, fontWeight: 800, background: '#fef9e7', color: '#c89c20' },
-  nivelPill: { padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600, background: '#F5F3F0', color: '#6B6B6B' },
   estadoPill: { padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 },
   btnEditar: { padding: '6px 12px', background: '#eff6ff', color: '#3b82f6', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' },
   btnToggle: { padding: '6px 12px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' },

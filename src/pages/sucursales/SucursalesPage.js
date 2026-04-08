@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
-  collection, getDocs, query, orderBy,
+  collection, getDocs, query, orderBy, where,
   doc, updateDoc, addDoc, serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { COLECCIONES } from '../../constants';
 import Layout from '../../components/Layout';
+import { useAuth } from '../../context/AuthContext';
 
 const FORM_DEFAULT = {
   nombre: '', nombre_completo: '', direccion: '',
@@ -13,6 +14,7 @@ const FORM_DEFAULT = {
 };
 
 const SucursalesPage = () => {
+  const { tenantId } = useAuth();
   const [sucursales, setSucursales] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [mostrarForm, setMostrarForm] = useState(false);
@@ -20,12 +22,17 @@ const SucursalesPage = () => {
   const [form, setForm] = useState({ ...FORM_DEFAULT });
 
   useEffect(() => {
+    if (!tenantId) return;
     cargarSucursales();
-  }, []);
+  }, [tenantId]);
 
   const cargarSucursales = async () => {
     try {
-      const q = query(collection(db, COLECCIONES.SUCURSALES), orderBy('nombre', 'asc'));
+      const q = query(
+        collection(db, COLECCIONES.SUCURSALES),
+        where('tenant_id', '==', tenantId),
+        orderBy('nombre', 'asc')
+      );
       const snap = await getDocs(q);
       setSucursales(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (e) {
@@ -65,6 +72,7 @@ const SucursalesPage = () => {
   const handleGuardar = async (e) => {
     e.preventDefault();
     const datos = {
+      tenant_id: tenantId,
       nombre: form.nombre,
       nombre_completo: form.nombre_completo || form.nombre,
       direccion: form.direccion,
@@ -111,7 +119,6 @@ const SucursalesPage = () => {
         )}
       </div>
 
-      {/* Formulario */}
       {mostrarForm && (
         <div style={styles.formCard}>
           <h3 style={styles.formTitulo}>{editando ? 'Editar sucursal' : 'Nueva sucursal'}</h3>
@@ -150,7 +157,6 @@ const SucursalesPage = () => {
         </div>
       )}
 
-      {/* Cards de sucursales */}
       {cargando ? (
         <div style={styles.loading}>Cargando sucursales...</div>
       ) : sucursales.length === 0 ? (

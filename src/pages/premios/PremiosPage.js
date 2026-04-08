@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
-  collection, getDocs, query, orderBy,
+  collection, getDocs, query, orderBy, where,
   doc, updateDoc, addDoc, serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { COLECCIONES } from '../../constants';
 import Layout from '../../components/Layout';
+import { useAuth } from '../../context/AuthContext';
 
 const FORM_DEFAULT = {
   nombre: '', emoji: '🎁', tipo: 'descuento',
@@ -16,6 +17,7 @@ const FORM_DEFAULT = {
 };
 
 const PremiosPage = () => {
+  const { tenantId } = useAuth();
   const [premios, setPremios] = useState([]);
   const [sucursales, setSucursales] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -24,13 +26,18 @@ const PremiosPage = () => {
   const [form, setForm] = useState({ ...FORM_DEFAULT });
 
   useEffect(() => {
+    if (!tenantId) return;
     cargarPremios();
     cargarSucursales();
-  }, []);
+  }, [tenantId]);
 
   const cargarPremios = async () => {
     try {
-      const q = query(collection(db, COLECCIONES.PREMIOS), orderBy('costo_puntos', 'asc'));
+      const q = query(
+        collection(db, COLECCIONES.PREMIOS),
+        where('tenant_id', '==', tenantId),
+        orderBy('costo_puntos', 'asc')
+      );
       const snap = await getDocs(q);
       setPremios(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (e) {
@@ -42,7 +49,8 @@ const PremiosPage = () => {
 
   const cargarSucursales = async () => {
     try {
-      const snap = await getDocs(collection(db, COLECCIONES.SUCURSALES));
+      const q = query(collection(db, COLECCIONES.SUCURSALES), where('tenant_id', '==', tenantId));
+      const snap = await getDocs(q);
       setSucursales(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (e) {
       console.error(e);
@@ -97,6 +105,7 @@ const PremiosPage = () => {
       return;
     }
     const datos = {
+      tenant_id: tenantId,
       nombre: form.nombre,
       emoji: form.emoji,
       tipo: form.tipo,
@@ -170,7 +179,6 @@ const PremiosPage = () => {
           </div>
         </div>
 
-        {/* Niveles habilitados */}
         <div style={styles.campo}>
           <label style={styles.label}>Niveles que pueden canjear</label>
           <div style={styles.nivelesRow}>
@@ -187,7 +195,6 @@ const PremiosPage = () => {
           </div>
         </div>
 
-        {/* Stock limitado */}
         <div style={{ ...styles.campo, marginTop: 12 }}>
           <label style={styles.label}>
             <input type="checkbox" checked={form.stock_limitado} onChange={e => setForm({...form, stock_limitado: e.target.checked})} style={{ marginRight: 8 }} />
@@ -198,30 +205,24 @@ const PremiosPage = () => {
           )}
         </div>
 
-        {/* Límite de canjes por día */}
         <div style={{ ...styles.campo, marginTop: 12, marginBottom: 16 }}>
           <label style={styles.label}>Límite de canjes por cliente por día</label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
             <input
-              type="number"
-              min="1"
+              type="number" min="1"
               style={{ ...styles.input, width: 100 }}
               value={form.limite_canjes_dia || ''}
               onChange={e => setForm({...form, limite_canjes_dia: e.target.value ? parseInt(e.target.value) : null})}
               placeholder="∞"
             />
             <span style={{ fontSize: 12, color: '#6B6B6B' }}>
-              {form.limite_canjes_dia
-                ? `Máximo ${form.limite_canjes_dia} canje(s) por cliente por día`
-                : 'Sin límite — el cliente puede canjear sin restricción'}
+              {form.limite_canjes_dia ? `Máximo ${form.limite_canjes_dia} canje(s) por cliente por día` : 'Sin límite'}
             </span>
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: 10 }}>
-          <button type="submit" style={styles.btnGuardar}>
-            {editando ? 'Guardar cambios' : 'Crear premio'}
-          </button>
+          <button type="submit" style={styles.btnGuardar}>{editando ? 'Guardar cambios' : 'Crear premio'}</button>
           <button type="button" onClick={cancelar} style={styles.btnCancelar}>Cancelar</button>
         </div>
       </form>

@@ -1,35 +1,57 @@
 import React, { useEffect, useState } from 'react';
 import {
-  collection, getDocs, query, orderBy,
-  doc, updateDoc, addDoc, serverTimestamp
+  collection, getDocs, query, orderBy, where,
+  doc, updateDoc, setDoc, serverTimestamp
 } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { auth, db } from '../../firebase';
 import { COLECCIONES } from '../../constants';
 import Layout from '../../components/Layout';
+import { useAuth } from '../../context/AuthContext';
 
-const FORM_DEFAULT = {
-  nombre: '', emoji: '🎁', tipo: 'descuento',
-  costo_puntos: '', valor_descuento: '',
-  niveles_habilitados: ['bronce', 'oro', 'platino'],
-  sucursales: 'todas', stock_limitado: false, stock_disponible: '',
+const PERMISOS_LISTA = [
+  { key: 'sumar_puntos', label: 'Sumar puntos', desc: 'Registrar compras y sumar puntos al cliente' },
+  { key: 'ver_canjes', label: 'Ver canjes', desc: 'Ver los premios disponibles del cliente' },
+  { key: 'ejecutar_canjes', label: 'Ejecutar canjes', desc: 'Procesar canjes de premios' },
+  { key: 'editar_cliente', label: 'Editar cliente', desc: 'Modificar datos del perfil del cliente' },
+  { key: 'ajuste_manual', label: 'Ajuste manual de puntos', desc: 'Agregar o quitar puntos manualmente' },
+  { key: 'ver_historial', label: 'Ver historial', desc: 'Ver transacciones anteriores' },
+];
+
+const PERMISOS_DEFAULT = {
+  sumar_puntos: true, ver_canjes: true, ejecutar_canjes: true,
+  editar_cliente: false, ajuste_manual: false, ver_historial: true,
 };
 
-const PremiosPage = () => {
-  const [premios, setPremios] = useState([]);
+const CajerosPage = () => {
+  const { tenantId, usuario } = useAuth();
+  const [cajeros, setCajeros] = useState([]);
+  const [sucursales, setSucursales] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [mostrarForm, setMostrarForm] = useState(false);
-  const [editando, setEditando] = useState(null);
-  const [form, setForm] = useState({ ...FORM_DEFAULT });
+  const [creando, setCreando] = useState(false);
+  const [editandoPermisos, setEditandoPermisos] = useState(null);
+  const [form, setForm] = useState({
+    nombre: '', apellido: '', email: '', password: '',
+    sucursal_id: '',
+    permisos: { ...PERMISOS_DEFAULT },
+  });
 
   useEffect(() => {
-    cargarPremios();
-  }, []);
+    if (!tenantId) return;
+    cargarCajeros();
+    cargarSucursales();
+  }, [tenantId]);
 
-  const cargarPremios = async () => {
+  const cargarCajeros = async () => {
     try {
-      const q = query(collection(db, COLECCIONES.PREMIOS), orderBy('costo_puntos', 'asc'));
+      const q = query(
+        collection(db, COLECCIONES.CAJEROS),
+        where('tenant_id', '==', tenantId),
+        orderBy('creado_en', 'desc')
+      );
       const snap = await getDocs(q);
-      setPremios(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setCajeros(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (e) {
       console.error(e);
     } finally {
@@ -37,238 +59,227 @@ const PremiosPage = () => {
     }
   };
 
-  const toggleActivo = async (premio) => {
+  const cargarSucursales = async () => {
     try {
-      await updateDoc(doc(db, COLECCIONES.PREMIOS, premio.id), { activo: !premio.activo });
-      setPremios(prev => prev.map(p => p.id === premio.id ? { ...p, activo: !p.activo } : p));
+      const q = query(collection(db, COLECCIONES.SUCURSALES), where('tenant_id', '==', tenantId));
+      const snap = await getDocs(q);
+      setSucursales(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (e) {
       console.error(e);
     }
   };
 
-  const toggleNivel = (nivel) => {
-    const niveles = form.niveles_habilitados;
-    if (niveles.includes(nivel)) {
-      setForm({ ...form, niveles_habilitados: niveles.filter(n => n !== nivel) });
-    } else {
-      setForm({ ...form, niveles_habilitados: [...niveles, nivel] });
+  const toggleActivo = async (cajero) => {
+    try {
+      await updateDoc(doc(db, COLECCIONES.CAJEROS, cajero.id), { activo: !cajero.activo });
+      setCajeros(prev => prev.map(c => c.id === cajero.id ? { ...c, activo: !c.activo } : c));
+    } catch (e) {
+      console.error(e);
     }
   };
 
-  const abrirEditar = (premio) => {
-    setForm({
-      nombre: premio.nombre || '',
-      emoji: premio.emoji || '🎁',
-      tipo: premio.tipo || 'descuento',
-      costo_puntos: premio.costo_puntos || '',
-      valor_descuento: premio.valor_descuento || '',
-      niveles_habilitados: premio.niveles_habilitados || ['bronce', 'oro', 'platino'],
-      sucursales: premio.sucursales?.[0] || 'todas',
-      stock_limitado: premio.stock_limitado || false,
-      stock_disponible: premio.stock_disponible || '',
-    });
-    setEditando(premio);
-    setMostrarForm(true);
+  const guardarPermisos = async (cajeroId, permisos) => {
+    try {
+      await updateDoc(doc(db, COLECCIONES.CAJEROS, cajeroId), { permisos });
+      setCajeros(prev => prev.map(c => c.id === cajeroId ? { ...c, permisos } : c));
+      setEditandoPermisos(null);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const cancelar = () => {
-    setMostrarForm(false);
-    setEditando(null);
-    setForm({ ...FORM_DEFAULT });
-  };
-
-  const handleGuardar = async (e) => {
+  const handleCrear = async (e) => {
     e.preventDefault();
-    if (form.niveles_habilitados.length === 0) {
-      alert('Selecciona al menos un nivel habilitado');
-      return;
-    }
-    const datos = {
-      nombre: form.nombre,
-      emoji: form.emoji,
-      tipo: form.tipo,
-      costo_puntos: parseInt(form.costo_puntos),
-      valor_descuento: form.tipo === 'descuento' ? parseFloat(form.valor_descuento) : null,
-      niveles_habilitados: form.niveles_habilitados,
-      sucursales: [form.sucursales],
-      stock_limitado: form.stock_limitado,
-      stock_disponible: form.stock_limitado ? parseInt(form.stock_disponible) : null,
-      activo: true,
-    };
-
+    setCreando(true);
     try {
-      if (editando) {
-        await updateDoc(doc(db, COLECCIONES.PREMIOS, editando.id), datos);
-        setPremios(prev => prev.map(p => p.id === editando.id ? { ...p, ...datos } : p));
-        alert('Premio actualizado correctamente');
-      } else {
-        await addDoc(collection(db, COLECCIONES.PREMIOS), {
-          ...datos, total_canjeado: 0, creado_en: serverTimestamp(),
-        });
-        alert('Premio creado correctamente');
-        cargarPremios();
-      }
-      cancelar();
+      const credencial = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      const uid = credencial.user.uid;
+
+      await setDoc(doc(db, 'usuarios_roles', uid), {
+        uid, rol: 'cajero', tenant_id: tenantId, creado_en: serverTimestamp(),
+      });
+
+      await setDoc(doc(db, COLECCIONES.CAJEROS, uid), {
+        uid, tenant_id: tenantId,
+        email: form.email, nombre: form.nombre, apellido: form.apellido,
+        sucursal_id: form.sucursal_id,
+        permisos: form.permisos,
+        activo: true, ultimo_acceso: null,
+        creado_en: serverTimestamp(), creado_por: usuario?.uid,
+      });
+
+      setMostrarForm(false);
+      setForm({ nombre: '', apellido: '', email: '', password: '', sucursal_id: '', permisos: { ...PERMISOS_DEFAULT } });
+      cargarCajeros();
+      alert('Cajero creado exitosamente');
     } catch (e) {
-      console.error(e);
-      alert('Error al guardar premio');
+      alert('Error: ' + e.message);
+    } finally {
+      setCreando(false);
     }
   };
-
-  const FormularioPremio = () => (
-    <div style={styles.formCard}>
-      <h3 style={styles.formTitulo}>{editando ? 'Editar premio' : 'Nuevo premio'}</h3>
-      <form onSubmit={handleGuardar}>
-        <div style={styles.formGrid}>
-          <div style={styles.campo}>
-            <label style={styles.label}>Nombre del premio</label>
-            <input style={styles.input} value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} placeholder="Descuento $5" required />
-          </div>
-          <div style={styles.campo}>
-            <label style={styles.label}>Emoji</label>
-            <input style={styles.input} value={form.emoji} onChange={e => setForm({...form, emoji: e.target.value})} placeholder="🎁" />
-          </div>
-          <div style={styles.campo}>
-            <label style={styles.label}>Tipo</label>
-            <select style={styles.input} value={form.tipo} onChange={e => setForm({...form, tipo: e.target.value})}>
-              <option value="descuento">Descuento en $</option>
-              <option value="producto">Producto gratis</option>
-            </select>
-          </div>
-          <div style={styles.campo}>
-            <label style={styles.label}>Costo en puntos</label>
-            <input style={styles.input} type="number" value={form.costo_puntos} onChange={e => setForm({...form, costo_puntos: e.target.value})} placeholder="500" required />
-          </div>
-          {form.tipo === 'descuento' && (
-            <div style={styles.campo}>
-              <label style={styles.label}>Valor del descuento ($)</label>
-              <input style={styles.input} type="number" step="0.01" value={form.valor_descuento} onChange={e => setForm({...form, valor_descuento: e.target.value})} placeholder="5.00" />
-            </div>
-          )}
-          <div style={styles.campo}>
-            <label style={styles.label}>Sucursal</label>
-            <select style={styles.input} value={form.sucursales} onChange={e => setForm({...form, sucursales: e.target.value})}>
-              <option value="todas">Todas las sucursales</option>
-              <option value="st-hubert">St-Hubert</option>
-              <option value="st-laurent">St-Laurent</option>
-              <option value="brossard">Brossard</option>
-            </select>
-          </div>
-        </div>
-
-        <div style={styles.campo}>
-          <label style={styles.label}>Niveles que pueden canjear</label>
-          <div style={styles.nivelesRow}>
-            {['bronce', 'oro', 'platino'].map(nivel => (
-              <button key={nivel} type="button" onClick={() => toggleNivel(nivel)}
-                style={{
-                  ...styles.nivelBtn,
-                  background: form.niveles_habilitados.includes(nivel) ? '#C8102E' : '#F5F3F0',
-                  color: form.niveles_habilitados.includes(nivel) ? 'white' : '#6B6B6B',
-                }}>
-                {nivel.charAt(0).toUpperCase() + nivel.slice(1)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ ...styles.campo, marginBottom: 16 }}>
-          <label style={styles.label}>
-            <input type="checkbox" checked={form.stock_limitado} onChange={e => setForm({...form, stock_limitado: e.target.checked})} style={{ marginRight: 8 }} />
-            Stock limitado
-          </label>
-          {form.stock_limitado && (
-            <input style={{ ...styles.input, marginTop: 8, width: 200 }} type="number" value={form.stock_disponible} onChange={e => setForm({...form, stock_disponible: e.target.value})} placeholder="Cantidad disponible" />
-          )}
-        </div>
-
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button type="submit" style={styles.btnGuardar}>
-            {editando ? 'Guardar cambios' : 'Crear premio'}
-          </button>
-          <button type="button" onClick={cancelar} style={styles.btnCancelar}>Cancelar</button>
-        </div>
-      </form>
-    </div>
-  );
 
   return (
-    <Layout titulo="Premios">
+    <Layout titulo="Cajeros">
       <div style={styles.toolbar}>
-        <span style={styles.contador}>{premios.length} premios</span>
-        {!mostrarForm && (
-          <button onClick={() => setMostrarForm(true)} style={styles.btnNuevo}>+ Nuevo premio</button>
-        )}
+        <span style={styles.contador}>{cajeros.length} cajeros</span>
+        <button onClick={() => setMostrarForm(!mostrarForm)} style={styles.btnNuevo}>
+          {mostrarForm ? 'Cancelar' : '+ Nuevo cajero'}
+        </button>
       </div>
 
-      {mostrarForm && <FormularioPremio />}
+      {mostrarForm && (
+        <div style={styles.formCard}>
+          <h3 style={styles.formTitulo}>Crear nuevo cajero</h3>
+          <form onSubmit={handleCrear}>
+            <div style={styles.formGrid}>
+              <div style={styles.campo}>
+                <label style={styles.label}>Nombre</label>
+                <input style={styles.input} value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} placeholder="Juan" required />
+              </div>
+              <div style={styles.campo}>
+                <label style={styles.label}>Apellido</label>
+                <input style={styles.input} value={form.apellido} onChange={e => setForm({...form, apellido: e.target.value})} placeholder="Pérez" required />
+              </div>
+              <div style={styles.campo}>
+                <label style={styles.label}>Correo</label>
+                <input style={styles.input} type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="cajero@empresa.com" required />
+              </div>
+              <div style={styles.campo}>
+                <label style={styles.label}>Contraseña</label>
+                <input style={styles.input} type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} placeholder="Mínimo 6 caracteres" required />
+              </div>
+              <div style={styles.campo}>
+                <label style={styles.label}>Sucursal</label>
+                <select style={styles.input} value={form.sucursal_id} onChange={e => setForm({...form, sucursal_id: e.target.value})}>
+                  <option value="">Seleccionar sucursal</option>
+                  {sucursales.map(s => (
+                    <option key={s.id} value={s.id}>{s.nombre_completo || s.nombre}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div style={styles.permisosSection}>
+              <div style={styles.permisosTitulo}>Permisos del cajero</div>
+              <div style={styles.permisosGrid}>
+                {PERMISOS_LISTA.map(p => (
+                  <label key={p.key} style={styles.permisoItem}>
+                    <input
+                      type="checkbox"
+                      checked={form.permisos[p.key]}
+                      onChange={e => setForm({ ...form, permisos: { ...form.permisos, [p.key]: e.target.checked } })}
+                      style={styles.checkbox}
+                    />
+                    <div>
+                      <div style={styles.permisoLabel}>{p.label}</div>
+                      <div style={styles.permisoDesc}>{p.desc}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <button type="submit" style={styles.btnGuardar} disabled={creando}>
+              {creando ? 'Creando...' : 'Crear cajero'}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {editandoPermisos && (
+        <div style={styles.modalOverlay} onClick={() => setEditandoPermisos(null)}>
+          <div style={styles.modal} onClick={e => e.stopPropagation()}>
+            <h3 style={styles.modalTitulo}>
+              Editar permisos — {editandoPermisos.nombre} {editandoPermisos.apellido}
+            </h3>
+            <div style={styles.permisosGrid}>
+              {PERMISOS_LISTA.map(p => (
+                <label key={p.key} style={styles.permisoItem}>
+                  <input
+                    type="checkbox"
+                    checked={editandoPermisos.permisos?.[p.key] || false}
+                    onChange={e => setEditandoPermisos({
+                      ...editandoPermisos,
+                      permisos: { ...editandoPermisos.permisos, [p.key]: e.target.checked }
+                    })}
+                    style={styles.checkbox}
+                  />
+                  <div>
+                    <div style={styles.permisoLabel}>{p.label}</div>
+                    <div style={styles.permisoDesc}>{p.desc}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div style={styles.modalBtns}>
+              <button onClick={() => setEditandoPermisos(null)} style={styles.btnCancelar}>Cancelar</button>
+              <button onClick={() => guardarPermisos(editandoPermisos.id, editandoPermisos.permisos)} style={styles.btnGuardar}>
+                Guardar permisos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={styles.card}>
         {cargando ? (
-          <div style={styles.loading}>Cargando premios...</div>
+          <div style={styles.loading}>Cargando cajeros...</div>
+        ) : cajeros.length === 0 ? (
+          <div style={styles.loading}>No hay cajeros registrados</div>
         ) : (
           <table style={styles.tabla}>
             <thead>
               <tr>
-                <th style={styles.th}>Premio</th>
-                <th style={styles.th}>Tipo</th>
-                <th style={styles.th}>Costo</th>
-                <th style={styles.th}>Niveles</th>
+                <th style={styles.th}>Cajero</th>
+                <th style={styles.th}>Correo</th>
                 <th style={styles.th}>Sucursal</th>
-                <th style={styles.th}>Canjeados</th>
+                <th style={styles.th}>Permisos activos</th>
                 <th style={styles.th}>Estado</th>
                 <th style={styles.th}>Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {premios.map(premio => (
-                <tr key={premio.id} style={styles.tr}>
+              {cajeros.map(cajero => (
+                <tr key={cajero.id} style={styles.tr}>
                   <td style={styles.td}>
-                    <div style={styles.premioCell}>
-                      <span style={styles.premioEmoji}>{premio.emoji || '🎁'}</span>
-                      <span style={styles.premioNombre}>{premio.nombre}</span>
+                    <div style={styles.cajeroCell}>
+                      <div style={styles.avatar}>
+                        {cajero.nombre?.charAt(0)}{cajero.apellido?.charAt(0)}
+                      </div>
+                      <div style={styles.cajeroNombre}>{cajero.nombre} {cajero.apellido}</div>
                     </div>
                   </td>
+                  <td style={styles.td}>{cajero.email}</td>
+                  <td style={styles.td}>{cajero.sucursal_id}</td>
                   <td style={styles.td}>
-                    <span style={{
-                      ...styles.tipoPill,
-                      background: premio.tipo === 'descuento' ? '#fef2f4' : '#e8f5e9',
-                      color: premio.tipo === 'descuento' ? '#C8102E' : '#15803d',
-                    }}>
-                      {premio.tipo === 'descuento' ? 'Descuento' : 'Producto'}
-                    </span>
-                  </td>
-                  <td style={{ ...styles.td, fontWeight: 700 }}>{(premio.costo_puntos || 0).toLocaleString()} pts</td>
-                  <td style={styles.td}>
-                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      {premio.niveles_habilitados?.map(n => (
-                        <span key={n} style={styles.nivelPill}>{n}</span>
+                    <div style={styles.permisosWrap}>
+                      {PERMISOS_LISTA.filter(p => cajero.permisos?.[p.key]).map(p => (
+                        <span key={p.key} style={styles.permisoPill}>{p.label}</span>
                       ))}
                     </div>
                   </td>
-                  <td style={styles.td}>{premio.sucursales?.join(', ')}</td>
-                  <td style={styles.td}>{premio.total_canjeado || 0}</td>
                   <td style={styles.td}>
                     <span style={{
                       ...styles.estadoPill,
-                      background: premio.activo ? '#dcfce7' : '#f5f5f5',
-                      color: premio.activo ? '#15803d' : '#6B6B6B',
+                      background: cajero.activo ? '#dcfce7' : '#f5f5f5',
+                      color: cajero.activo ? '#15803d' : '#6B6B6B',
                     }}>
-                      {premio.activo ? 'Activo' : 'Inactivo'}
+                      {cajero.activo ? 'Activo' : 'Inactivo'}
                     </span>
                   </td>
                   <td style={styles.td}>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => abrirEditar(premio)} style={styles.btnEditar}>Editar</button>
+                      <button onClick={() => setEditandoPermisos({ ...cajero })} style={styles.btnEditar}>Permisos</button>
                       <button
-                        onClick={() => toggleActivo(premio)}
+                        onClick={() => toggleActivo(cajero)}
                         style={{
                           ...styles.btnToggle,
-                          background: premio.activo ? '#fef2f4' : '#dcfce7',
-                          color: premio.activo ? '#C8102E' : '#15803d',
+                          background: cajero.activo ? '#fef2f4' : '#dcfce7',
+                          color: cajero.activo ? '#C8102E' : '#15803d',
                         }}
                       >
-                        {premio.activo ? 'Desactivar' : 'Activar'}
+                        {cajero.activo ? 'Desactivar' : 'Activar'}
                       </button>
                     </div>
                   </td>
@@ -292,24 +303,33 @@ const styles = {
   campo: { marginBottom: 12 },
   label: { display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6B6B', marginBottom: 5 },
   input: { width: '100%', padding: '9px 12px', fontSize: 14, borderRadius: 8, border: '1.5px solid rgba(0,0,0,0.1)', background: '#F5F3F0', boxSizing: 'border-box', outline: 'none' },
-  nivelesRow: { display: 'flex', gap: 8, marginTop: 6 },
-  nivelBtn: { padding: '8px 16px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  permisosSection: { background: '#F5F3F0', borderRadius: 12, padding: 16, marginBottom: 16 },
+  permisosTitulo: { fontSize: 13, fontWeight: 700, color: '#0F0F0F', marginBottom: 12 },
+  permisosGrid: { display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 10 },
+  permisoItem: { display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', background: 'white', borderRadius: 10, padding: 12 },
+  checkbox: { marginTop: 2, width: 16, height: 16, accentColor: '#C8102E', flexShrink: 0 },
+  permisoLabel: { fontSize: 13, fontWeight: 600, color: '#0F0F0F' },
+  permisoDesc: { fontSize: 11, color: '#6B6B6B', marginTop: 2 },
   btnGuardar: { padding: '11px 24px', background: '#C8102E', color: 'white', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' },
   btnCancelar: { padding: '11px 24px', background: '#F5F3F0', color: '#6B6B6B', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' },
+  modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 },
+  modal: { background: 'white', borderRadius: 16, padding: 28, width: 560, maxWidth: '90vw' },
+  modalTitulo: { fontSize: 16, fontWeight: 700, color: '#0F0F0F', marginBottom: 16, marginTop: 0 },
+  modalBtns: { display: 'flex', gap: 10, marginTop: 16, justifyContent: 'flex-end' },
   card: { background: 'white', borderRadius: 14, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
   loading: { textAlign: 'center', padding: 40, color: '#6B6B6B' },
   tabla: { width: '100%', borderCollapse: 'collapse' },
   th: { textAlign: 'left', padding: '10px 14px', fontSize: 11, fontWeight: 600, color: '#6B6B6B', background: '#F5F3F0', borderBottom: '1px solid rgba(0,0,0,0.08)', textTransform: 'uppercase', letterSpacing: '0.05em' },
   tr: { borderBottom: '1px solid rgba(0,0,0,0.06)' },
   td: { padding: '12px 14px', fontSize: 13, color: '#0F0F0F', verticalAlign: 'middle' },
-  premioCell: { display: 'flex', alignItems: 'center', gap: 10 },
-  premioEmoji: { fontSize: 24 },
-  premioNombre: { fontSize: 13, fontWeight: 600 },
-  tipoPill: { padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 },
-  nivelPill: { padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600, background: '#F5F3F0', color: '#6B6B6B' },
+  cajeroCell: { display: 'flex', alignItems: 'center', gap: 10 },
+  avatar: { width: 36, height: 36, borderRadius: '50%', background: '#9e0a22', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 },
+  cajeroNombre: { fontSize: 13, fontWeight: 600 },
+  permisosWrap: { display: 'flex', flexWrap: 'wrap', gap: 4 },
+  permisoPill: { padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600, background: '#F5F3F0', color: '#6B6B6B' },
   estadoPill: { padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 },
   btnEditar: { padding: '6px 12px', background: '#eff6ff', color: '#3b82f6', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer' },
   btnToggle: { padding: '6px 12px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer' },
 };
 
-export default PremiosPage;
+export default CajerosPage;

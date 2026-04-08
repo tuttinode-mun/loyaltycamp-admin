@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { COLECCIONES } from '../constants';
 import Layout from '../components/Layout';
+import { useAuth } from '../context/AuthContext';
 
 const ExportarPage = () => {
+  const { tenantId } = useAuth();
   const [cargando, setCargando] = useState(false);
   const [filtros, setFiltros] = useState({
     nivel: '',
@@ -38,48 +40,28 @@ const ExportarPage = () => {
 
   const aplicarFiltros = (clientes) => {
     return clientes.filter(c => {
-      // Nivel
       if (filtros.nivel && c.nivel !== filtros.nivel) return false;
-
-      // Puntos mínimos
       if (filtros.puntos_min && (c.puntos_vigentes || 0) < parseInt(filtros.puntos_min)) return false;
-
-      // Puntos máximos
       if (filtros.puntos_max && (c.puntos_vigentes || 0) > parseInt(filtros.puntos_max)) return false;
-
-      // Sucursal
       if (filtros.sucursal && c.sucursal_favorita !== filtros.sucursal && c.sucursal_registro !== filtros.sucursal) return false;
-
-      // Sin compras
       if (filtros.sin_compras && (c.total_visitas || 0) > 0) return false;
-
-      // Con canjes
       if (filtros.con_canjes && (c.puntos_canjeados || 0) === 0) return false;
-
-      // Fecha registro desde
       if (filtros.fecha_registro_desde && c.creado_en) {
         const fecha = c.creado_en.toDate ? c.creado_en.toDate() : new Date(c.creado_en);
         if (fecha < new Date(filtros.fecha_registro_desde)) return false;
       }
-
-      // Fecha registro hasta
       if (filtros.fecha_registro_hasta && c.creado_en) {
         const fecha = c.creado_en.toDate ? c.creado_en.toDate() : new Date(c.creado_en);
         if (fecha > new Date(filtros.fecha_registro_hasta)) return false;
       }
-
-      // Fecha última compra desde
       if (filtros.fecha_compra_desde && c.ultima_compra) {
         const fecha = c.ultima_compra.toDate ? c.ultima_compra.toDate() : new Date(c.ultima_compra);
         if (fecha < new Date(filtros.fecha_compra_desde)) return false;
       }
-
-      // Fecha última compra hasta
       if (filtros.fecha_compra_hasta && c.ultima_compra) {
         const fecha = c.ultima_compra.toDate ? c.ultima_compra.toDate() : new Date(c.ultima_compra);
         if (fecha > new Date(filtros.fecha_compra_hasta)) return false;
       }
-
       return true;
     });
   };
@@ -87,7 +69,9 @@ const ExportarPage = () => {
   const cargarYFiltrar = async () => {
     setCargando(true);
     try {
-      const snap = await getDocs(collection(db, COLECCIONES.CLIENTES));
+      const snap = await getDocs(
+        query(collection(db, COLECCIONES.CLIENTES), where('tenant_id', '==', tenantId))
+      );
       const todos = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       return aplicarFiltros(todos);
     } finally {
@@ -159,8 +143,6 @@ const ExportarPage = () => {
 
   return (
     <Layout titulo="Exportar datos">
-
-      {/* Filtros */}
       <div style={styles.card}>
         <div style={styles.cardHeader}>
           <h3 style={styles.cardTitulo}>🔍 Filtros de exportación</h3>
@@ -175,8 +157,6 @@ const ExportarPage = () => {
         </div>
 
         <div style={styles.filtrosGrid}>
-
-          {/* Nivel */}
           <div style={styles.campo}>
             <label style={styles.label}>Nivel de lealtad</label>
             <select style={styles.input} value={filtros.nivel} onChange={e => updateFiltro('nivel', e.target.value)}>
@@ -186,8 +166,6 @@ const ExportarPage = () => {
               <option value="platino">Platino</option>
             </select>
           </div>
-
-          {/* Sucursal */}
           <div style={styles.campo}>
             <label style={styles.label}>Sucursal favorita</label>
             <select style={styles.input} value={filtros.sucursal} onChange={e => updateFiltro('sucursal', e.target.value)}>
@@ -197,98 +175,43 @@ const ExportarPage = () => {
               <option value="brossard">Brossard</option>
             </select>
           </div>
-
-          {/* Puntos min */}
           <div style={styles.campo}>
             <label style={styles.label}>Puntos vigentes mínimos</label>
-            <input
-              type="number"
-              style={styles.input}
-              placeholder="Ej: 500"
-              value={filtros.puntos_min}
-              onChange={e => updateFiltro('puntos_min', e.target.value)}
-            />
+            <input type="number" style={styles.input} placeholder="Ej: 500" value={filtros.puntos_min} onChange={e => updateFiltro('puntos_min', e.target.value)} />
           </div>
-
-          {/* Puntos max */}
           <div style={styles.campo}>
             <label style={styles.label}>Puntos vigentes máximos</label>
-            <input
-              type="number"
-              style={styles.input}
-              placeholder="Ej: 5000"
-              value={filtros.puntos_max}
-              onChange={e => updateFiltro('puntos_max', e.target.value)}
-            />
+            <input type="number" style={styles.input} placeholder="Ej: 5000" value={filtros.puntos_max} onChange={e => updateFiltro('puntos_max', e.target.value)} />
           </div>
-
-          {/* Fecha registro desde */}
           <div style={styles.campo}>
             <label style={styles.label}>Registro desde</label>
-            <input
-              type="date"
-              style={styles.input}
-              value={filtros.fecha_registro_desde}
-              onChange={e => updateFiltro('fecha_registro_desde', e.target.value)}
-            />
+            <input type="date" style={styles.input} value={filtros.fecha_registro_desde} onChange={e => updateFiltro('fecha_registro_desde', e.target.value)} />
           </div>
-
-          {/* Fecha registro hasta */}
           <div style={styles.campo}>
             <label style={styles.label}>Registro hasta</label>
-            <input
-              type="date"
-              style={styles.input}
-              value={filtros.fecha_registro_hasta}
-              onChange={e => updateFiltro('fecha_registro_hasta', e.target.value)}
-            />
+            <input type="date" style={styles.input} value={filtros.fecha_registro_hasta} onChange={e => updateFiltro('fecha_registro_hasta', e.target.value)} />
           </div>
-
-          {/* Última compra desde */}
           <div style={styles.campo}>
             <label style={styles.label}>Última compra desde</label>
-            <input
-              type="date"
-              style={styles.input}
-              value={filtros.fecha_compra_desde}
-              onChange={e => updateFiltro('fecha_compra_desde', e.target.value)}
-            />
+            <input type="date" style={styles.input} value={filtros.fecha_compra_desde} onChange={e => updateFiltro('fecha_compra_desde', e.target.value)} />
           </div>
-
-          {/* Última compra hasta */}
           <div style={styles.campo}>
             <label style={styles.label}>Última compra hasta</label>
-            <input
-              type="date"
-              style={styles.input}
-              value={filtros.fecha_compra_hasta}
-              onChange={e => updateFiltro('fecha_compra_hasta', e.target.value)}
-            />
+            <input type="date" style={styles.input} value={filtros.fecha_compra_hasta} onChange={e => updateFiltro('fecha_compra_hasta', e.target.value)} />
           </div>
-
         </div>
 
-        {/* Filtros booleanos */}
         <div style={styles.booleanos}>
           <label style={styles.checkLabel}>
-            <input
-              type="checkbox"
-              checked={filtros.con_canjes}
-              onChange={e => updateFiltro('con_canjes', e.target.checked)}
-            />
+            <input type="checkbox" checked={filtros.con_canjes} onChange={e => updateFiltro('con_canjes', e.target.checked)} />
             Solo clientes que han canjeado puntos
           </label>
           <label style={styles.checkLabel}>
-            <input
-              type="checkbox"
-              checked={filtros.sin_compras}
-              onChange={e => updateFiltro('sin_compras', e.target.checked)}
-            />
-            Solo clientes sin compras (registrados pero no han comprado)
+            <input type="checkbox" checked={filtros.sin_compras} onChange={e => updateFiltro('sin_compras', e.target.checked)} />
+            Solo clientes sin compras
           </label>
         </div>
 
-        {/* Filtros activos como pills */}
         {filtrosActivos.length > 0 && (
           <div style={styles.pillsRow}>
             {filtros.nivel && <span style={styles.pill}>Nivel: {filtros.nivel}</span>}
@@ -304,7 +227,6 @@ const ExportarPage = () => {
           </div>
         )}
 
-        {/* Acciones */}
         <div style={styles.acciones}>
           <button onClick={handlePreview} disabled={cargando} style={styles.btnPreview}>
             {cargando ? 'Cargando...' : '👁 Ver preview'}
@@ -315,7 +237,6 @@ const ExportarPage = () => {
         </div>
       </div>
 
-      {/* Preview */}
       {preview && (
         <div style={styles.previewCard}>
           <div style={styles.previewHeader}>
@@ -357,7 +278,6 @@ const ExportarPage = () => {
           )}
         </div>
       )}
-
     </Layout>
   );
 };
