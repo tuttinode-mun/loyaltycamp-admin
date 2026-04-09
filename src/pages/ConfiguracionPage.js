@@ -8,6 +8,8 @@ const ConfiguracionPage = () => {
   const { usuario } = useAuth();
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
+  const [guardandoKiosk, setGuardandoKiosk] = useState(false);
+  const [imagenKiosk, setImagenKiosk] = useState('');
   const [config, setConfig] = useState({
     puntos_por_peso: 1,
     niveles_visibles: true,
@@ -42,6 +44,10 @@ const ConfiguracionPage = () => {
         if (snap.exists()) {
           setConfig(prev => ({ ...prev, ...snap.data() }));
         }
+        const snapKiosk = await getDoc(doc(db, 'config', 'kiosk'));
+        if (snapKiosk.exists() && snapKiosk.data().imagen_url) {
+          setImagenKiosk(snapKiosk.data().imagen_url);
+        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -67,6 +73,26 @@ const ConfiguracionPage = () => {
     }
   };
 
+  const guardarKiosk = async () => {
+    if (!imagenKiosk) {
+      alert('Ingresa una URL de imagen válida');
+      return;
+    }
+    setGuardandoKiosk(true);
+    try {
+      await setDoc(doc(db, 'config', 'kiosk'), {
+        imagen_url: imagenKiosk,
+        actualizado_en: serverTimestamp(),
+        actualizado_por: usuario?.uid,
+      });
+      alert('Imagen del kiosk guardada correctamente');
+    } catch (e) {
+      alert('Error al guardar: ' + e.message);
+    } finally {
+      setGuardandoKiosk(false);
+    }
+  };
+
   const updateConfig = (path, value) => {
     const keys = path.split('.');
     setConfig(prev => {
@@ -85,6 +111,37 @@ const ConfiguracionPage = () => {
 
   return (
     <Layout titulo="Configuración">
+
+      {/* Imagen Kiosk */}
+      <div style={styles.section}>
+        <h2 style={styles.sectionTitulo}>🖥️ Imagen del Kiosk</h2>
+        <div style={styles.card}>
+          <p style={{ fontSize: 13, color: '#6B6B6B', marginTop: 0, marginBottom: 16 }}>
+            Sube la imagen que se mostrará en la pantalla del cliente en caja. Usa una URL de imagen (Google Drive, Imgur, etc.)
+          </p>
+          <div style={styles.kioskGrid}>
+            <div style={{ flex: 1 }}>
+              <div style={styles.campo}>
+                <label style={styles.label}>URL de la imagen</label>
+                <input
+                  style={{ ...styles.inputSmall, width: '100%', boxSizing: 'border-box' }}
+                  value={imagenKiosk}
+                  onChange={e => setImagenKiosk(e.target.value)}
+                  placeholder="https://i.imgur.com/ejemplo.jpg"
+                />
+              </div>
+              <button onClick={guardarKiosk} disabled={guardandoKiosk} style={{ ...styles.btnGuardar, width: 'auto', padding: '10px 24px', marginTop: 12, fontSize: 14 }}>
+                {guardandoKiosk ? 'Guardando...' : 'Guardar imagen'}
+              </button>
+            </div>
+            {imagenKiosk && (
+              <div style={styles.kioskPreview}>
+                <img src={imagenKiosk} alt="Preview kiosk" style={styles.kioskImg} onError={(e) => e.target.style.display = 'none'} />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Puntos */}
       <div style={styles.section}>
@@ -328,6 +385,9 @@ const styles = {
   section: { marginBottom: 20 },
   sectionTitulo: { fontSize: 16, fontWeight: 700, color: '#0F0F0F', marginBottom: 10, marginTop: 0 },
   card: { background: 'white', borderRadius: 14, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
+  kioskGrid: { display: 'flex', gap: 20, alignItems: 'flex-start' },
+  kioskPreview: { width: 200, height: 150, borderRadius: 10, overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(0,0,0,0.08)' },
+  kioskImg: { width: '100%', height: '100%', objectFit: 'cover' },
   nivelesGrid: { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16 },
   nivelCard: { background: '#F5F3F0', borderRadius: 12, padding: 14 },
   nivelEmoji: { fontSize: 28, marginBottom: 10 },
