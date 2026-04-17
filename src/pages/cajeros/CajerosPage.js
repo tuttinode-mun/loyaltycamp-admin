@@ -31,13 +31,14 @@ const CajerosPage = () => {
   const [mostrarForm, setMostrarForm] = useState(false);
   const [creando, setCreando] = useState(false);
   const [editandoPermisos, setEditandoPermisos] = useState(null);
+  const [editandoPin, setEditandoPin] = useState(null);
+  const [nuevoPin, setNuevoPin] = useState('');
   const [form, setForm] = useState({
-    nombre: '', apellido: '', email: '', password: '',
+    nombre: '', apellido: '', email: '', password: '', pin: '',
     sucursal_id: '',
     permisos: { ...PERMISOS_DEFAULT },
   });
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!tenantId) return;
     cargarCajeros();
@@ -89,8 +90,29 @@ const CajerosPage = () => {
     }
   };
 
+  const guardarPin = async () => {
+    if (!nuevoPin || nuevoPin.length < 4) {
+      alert('El PIN debe tener al menos 4 dígitos');
+      return;
+    }
+    try {
+      await updateDoc(doc(db, COLECCIONES.CAJEROS, editandoPin.id), { pin: nuevoPin });
+      setCajeros(prev => prev.map(c => c.id === editandoPin.id ? { ...c, pin: nuevoPin } : c));
+      setEditandoPin(null);
+      setNuevoPin('');
+      alert('PIN actualizado correctamente');
+    } catch (e) {
+      console.error(e);
+      alert('Error al actualizar PIN');
+    }
+  };
+
   const handleCrear = async (e) => {
     e.preventDefault();
+    if (!form.pin || form.pin.length < 4) {
+      alert('El PIN debe tener al menos 4 dígitos');
+      return;
+    }
     setCreando(true);
     try {
       const credencial = await createUserWithEmailAndPassword(auth, form.email, form.password);
@@ -102,17 +124,22 @@ const CajerosPage = () => {
 
       await setDoc(doc(db, COLECCIONES.CAJEROS, uid), {
         uid, tenant_id: tenantId,
-        email: form.email, nombre: form.nombre, apellido: form.apellido,
+        email: form.email,
+        nombre: form.nombre,
+        apellido: form.apellido,
         sucursal_id: form.sucursal_id,
+        pin: form.pin,
         permisos: form.permisos,
-        activo: true, ultimo_acceso: null,
-        creado_en: serverTimestamp(), creado_por: usuario?.uid,
+        activo: true,
+        ultimo_acceso: null,
+        creado_en: serverTimestamp(),
+        creado_por: usuario?.uid,
       });
 
       setMostrarForm(false);
-      setForm({ nombre: '', apellido: '', email: '', password: '', sucursal_id: '', permisos: { ...PERMISOS_DEFAULT } });
+      setForm({ nombre: '', apellido: '', email: '', password: '', pin: '', sucursal_id: '', permisos: { ...PERMISOS_DEFAULT } });
       cargarCajeros();
-      alert('Cajero creado exitosamente');
+      alert(`✅ Cajero creado.\n\nCredenciales:\nEmail: ${form.email}\nContraseña: ${form.password}\nPIN: ${form.pin}`);
     } catch (e) {
       alert('Error: ' + e.message);
     } finally {
@@ -151,11 +178,23 @@ const CajerosPage = () => {
                 <input style={styles.input} type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} placeholder="Mínimo 6 caracteres" required />
               </div>
               <div style={styles.campo}>
+                <label style={styles.label}>PIN (4-6 dígitos)</label>
+                <input
+                  style={styles.input}
+                  type="text"
+                  value={form.pin}
+                  onChange={e => setForm({...form, pin: e.target.value.replace(/\D/g, '').slice(0, 6)})}
+                  placeholder="1234"
+                  maxLength={6}
+                  required
+                />
+              </div>
+              <div style={styles.campo}>
                 <label style={styles.label}>Sucursal</label>
                 <select style={styles.input} value={form.sucursal_id} onChange={e => setForm({...form, sucursal_id: e.target.value})}>
                   <option value="">Seleccionar sucursal</option>
                   {sucursales.map(s => (
-                    <option key={s.id} value={s.id}>{s.nombre_completo || s.nombre}</option>
+                    <option key={s.id} value={s.nombre || s.id}>{s.nombre_completo || s.nombre}</option>
                   ))}
                 </select>
               </div>
@@ -188,6 +227,7 @@ const CajerosPage = () => {
         </div>
       )}
 
+      {/* Modal editar permisos */}
       {editandoPermisos && (
         <div style={styles.modalOverlay} onClick={() => setEditandoPermisos(null)}>
           <div style={styles.modal} onClick={e => e.stopPropagation()}>
@@ -223,6 +263,36 @@ const CajerosPage = () => {
         </div>
       )}
 
+      {/* Modal editar PIN */}
+      {editandoPin && (
+        <div style={styles.modalOverlay} onClick={() => { setEditandoPin(null); setNuevoPin(''); }}>
+          <div style={styles.modal} onClick={e => e.stopPropagation()}>
+            <h3 style={styles.modalTitulo}>
+              Cambiar PIN — {editandoPin.nombre} {editandoPin.apellido}
+            </h3>
+            <p style={{ fontSize: 13, color: '#6B6B6B', marginBottom: 16 }}>
+              PIN actual: {editandoPin.pin ? '****' : 'No asignado'}
+            </p>
+            <div style={styles.campo}>
+              <label style={styles.label}>Nuevo PIN (4-6 dígitos)</label>
+              <input
+                style={{ ...styles.input, width: 150, fontSize: 24, textAlign: 'center', letterSpacing: 8 }}
+                type="text"
+                value={nuevoPin}
+                onChange={e => setNuevoPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="1234"
+                maxLength={6}
+                autoFocus
+              />
+            </div>
+            <div style={styles.modalBtns}>
+              <button onClick={() => { setEditandoPin(null); setNuevoPin(''); }} style={styles.btnCancelar}>Cancelar</button>
+              <button onClick={guardarPin} style={styles.btnGuardar}>Guardar PIN</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={styles.card}>
         {cargando ? (
           <div style={styles.loading}>Cargando cajeros...</div>
@@ -235,6 +305,7 @@ const CajerosPage = () => {
                 <th style={styles.th}>Cajero</th>
                 <th style={styles.th}>Correo</th>
                 <th style={styles.th}>Sucursal</th>
+                <th style={styles.th}>PIN</th>
                 <th style={styles.th}>Permisos activos</th>
                 <th style={styles.th}>Estado</th>
                 <th style={styles.th}>Acciones</th>
@@ -254,6 +325,12 @@ const CajerosPage = () => {
                   <td style={styles.td}>{cajero.email}</td>
                   <td style={styles.td}>{cajero.sucursal_id}</td>
                   <td style={styles.td}>
+                    {cajero.pin
+                      ? <span style={styles.pinPill}>✓ Asignado</span>
+                      : <span style={{ color: '#C8102E', fontSize: 12 }}>Sin PIN</span>
+                    }
+                  </td>
+                  <td style={styles.td}>
                     <div style={styles.permisosWrap}>
                       {PERMISOS_LISTA.filter(p => cajero.permisos?.[p.key]).map(p => (
                         <span key={p.key} style={styles.permisoPill}>{p.label}</span>
@@ -270,8 +347,9 @@ const CajerosPage = () => {
                     </span>
                   </td>
                   <td style={styles.td}>
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <button onClick={() => setEditandoPermisos({ ...cajero })} style={styles.btnEditar}>Permisos</button>
+                      <button onClick={() => { setEditandoPin(cajero); setNuevoPin(''); }} style={{ ...styles.btnEditar, background: '#fef9e7', color: '#c89c20' }}>PIN</button>
                       <button
                         onClick={() => toggleActivo(cajero)}
                         style={{
@@ -326,6 +404,7 @@ const styles = {
   cajeroCell: { display: 'flex', alignItems: 'center', gap: 10 },
   avatar: { width: 36, height: 36, borderRadius: '50%', background: '#9e0a22', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, flexShrink: 0 },
   cajeroNombre: { fontSize: 13, fontWeight: 600 },
+  pinPill: { padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#dcfce7', color: '#15803d' },
   permisosWrap: { display: 'flex', flexWrap: 'wrap', gap: 4 },
   permisoPill: { padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 600, background: '#F5F3F0', color: '#6B6B6B' },
   estadoPill: { padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 },
