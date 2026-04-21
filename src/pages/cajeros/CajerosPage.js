@@ -34,7 +34,7 @@ const CajerosPage = () => {
   const [editandoPin, setEditandoPin] = useState(null);
   const [nuevoPin, setNuevoPin] = useState('');
   const [form, setForm] = useState({
-    nombre: '', apellido: '', email: '', password: '', pin: '',
+    nombre: '', apellido: '', email: '', pin: '',
     sucursal_id: '',
     permisos: { ...PERMISOS_DEFAULT },
   });
@@ -100,7 +100,7 @@ const CajerosPage = () => {
       setCajeros(prev => prev.map(c => c.id === editandoPin.id ? { ...c, pin: nuevoPin } : c));
       setEditandoPin(null);
       setNuevoPin('');
-      alert('PIN actualizado correctamente');
+      alert('PIN actualizado correctamente.\n\nImportante: El cajero debe usar este nuevo PIN para ingresar.');
     } catch (e) {
       console.error(e);
       alert('Error al actualizar PIN');
@@ -113,9 +113,14 @@ const CajerosPage = () => {
       alert('El PIN debe tener al menos 4 dígitos');
       return;
     }
+    if (!form.sucursal_id) {
+      alert('Selecciona una sucursal');
+      return;
+    }
     setCreando(true);
     try {
-      const credencial = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      // Crear usuario en Firebase Auth usando PIN como contraseña
+      const credencial = await createUserWithEmailAndPassword(auth, form.email, form.pin + 'LC26');
       const uid = credencial.user.uid;
 
       await setDoc(doc(db, 'usuarios_roles', uid), {
@@ -137,9 +142,9 @@ const CajerosPage = () => {
       });
 
       setMostrarForm(false);
-      setForm({ nombre: '', apellido: '', email: '', password: '', pin: '', sucursal_id: '', permisos: { ...PERMISOS_DEFAULT } });
+      setForm({ nombre: '', apellido: '', email: '', pin: '', sucursal_id: '', permisos: { ...PERMISOS_DEFAULT } });
       cargarCajeros();
-      alert(`✅ Cajero creado.\n\nCredenciales:\nEmail: ${form.email}\nContraseña: ${form.password}\nPIN: ${form.pin}`);
+      alert(`✅ Cajero creado correctamente.\n\nCredenciales de acceso:\nEmail: ${form.email}\nPIN: ${form.pin}\n\nEl cajero usará el PIN para ingresar desde la app.`);
     } catch (e) {
       alert('Error: ' + e.message);
     } finally {
@@ -159,6 +164,9 @@ const CajerosPage = () => {
       {mostrarForm && (
         <div style={styles.formCard}>
           <h3 style={styles.formTitulo}>Crear nuevo cajero</h3>
+          <p style={{ fontSize: 13, color: '#6B6B6B', marginBottom: 16, marginTop: 0 }}>
+            El PIN será la contraseña de acceso del cajero en la app.
+          </p>
           <form onSubmit={handleCrear}>
             <div style={styles.formGrid}>
               <div style={styles.campo}>
@@ -170,17 +178,13 @@ const CajerosPage = () => {
                 <input style={styles.input} value={form.apellido} onChange={e => setForm({...form, apellido: e.target.value})} placeholder="Pérez" required />
               </div>
               <div style={styles.campo}>
-                <label style={styles.label}>Correo</label>
+                <label style={styles.label}>Correo electrónico</label>
                 <input style={styles.input} type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="cajero@empresa.com" required />
-              </div>
-              <div style={styles.campo}>
-                <label style={styles.label}>Contraseña</label>
-                <input style={styles.input} type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} placeholder="Mínimo 6 caracteres" required />
               </div>
               <div style={styles.campo}>
                 <label style={styles.label}>PIN (4-6 dígitos)</label>
                 <input
-                  style={styles.input}
+                  style={{ ...styles.input, letterSpacing: 8, fontSize: 20, textAlign: 'center' }}
                   type="text"
                   value={form.pin}
                   onChange={e => setForm({...form, pin: e.target.value.replace(/\D/g, '').slice(0, 6)})}
@@ -271,7 +275,7 @@ const CajerosPage = () => {
               Cambiar PIN — {editandoPin.nombre} {editandoPin.apellido}
             </h3>
             <p style={{ fontSize: 13, color: '#6B6B6B', marginBottom: 16 }}>
-              PIN actual: {editandoPin.pin ? '****' : 'No asignado'}
+              El nuevo PIN será la nueva contraseña de acceso del cajero.
             </p>
             <div style={styles.campo}>
               <label style={styles.label}>Nuevo PIN (4-6 dígitos)</label>
@@ -377,7 +381,7 @@ const styles = {
   contador: { fontSize: 13, color: '#6B6B6B' },
   btnNuevo: { padding: '10px 20px', background: '#C8102E', color: 'white', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' },
   formCard: { background: 'white', borderRadius: 14, padding: 24, marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
-  formTitulo: { fontSize: 16, fontWeight: 700, color: '#0F0F0F', marginBottom: 16, marginTop: 0 },
+  formTitulo: { fontSize: 16, fontWeight: 700, color: '#0F0F0F', marginBottom: 4, marginTop: 0 },
   formGrid: { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 16 },
   campo: { marginBottom: 12 },
   label: { display: 'block', fontSize: 12, fontWeight: 600, color: '#6B6B6B', marginBottom: 5 },
