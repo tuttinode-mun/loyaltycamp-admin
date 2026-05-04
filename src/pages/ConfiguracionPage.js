@@ -4,12 +4,26 @@ import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import Layout from '../components/Layout';
 
+const COLORES_PRESET = [
+  { nombre: 'Rojo', valor: '#C8102E' },
+  { nombre: 'Azul', valor: '#1a56db' },
+  { nombre: 'Verde', valor: '#057a55' },
+  { nombre: 'Naranja', valor: '#d97706' },
+  { nombre: 'Morado', valor: '#7e3af2' },
+  { nombre: 'Negro', valor: '#1a1a2e' },
+  { nombre: 'Rosa', valor: '#e91e8c' },
+  { nombre: 'Café', valor: '#7c4b3a' },
+];
+
 const ConfiguracionPage = () => {
-  const { usuario } = useAuth();
+  const { usuario, tenantId } = useAuth();
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [guardandoKiosk, setGuardandoKiosk] = useState(false);
+  const [guardandoBranding, setGuardandoBranding] = useState(false);
   const [imagenKiosk, setImagenKiosk] = useState('');
+  const [colorApp, setColorApp] = useState('#C8102E');
+  const [colorCustom, setColorCustom] = useState('#C8102E');
   const [config, setConfig] = useState({
     puntos_por_peso: 1,
     niveles_visibles: true,
@@ -41,12 +55,20 @@ const ConfiguracionPage = () => {
     const cargar = async () => {
       try {
         const snap = await getDoc(doc(db, 'config', 'general'));
-        if (snap.exists()) {
-          setConfig(prev => ({ ...prev, ...snap.data() }));
-        }
+        if (snap.exists()) setConfig(prev => ({ ...prev, ...snap.data() }));
+
         const snapKiosk = await getDoc(doc(db, 'config', 'kiosk'));
         if (snapKiosk.exists() && snapKiosk.data().imagen_url) {
           setImagenKiosk(snapKiosk.data().imagen_url);
+        }
+
+        // Cargar branding
+        if (tenantId) {
+          const snapBranding = await getDoc(doc(db, 'tenants', tenantId));
+          if (snapBranding.exists() && snapBranding.data().color_principal) {
+            setColorApp(snapBranding.data().color_principal);
+            setColorCustom(snapBranding.data().color_principal);
+          }
         }
       } catch (e) {
         console.error(e);
@@ -55,7 +77,7 @@ const ConfiguracionPage = () => {
       }
     };
     cargar();
-  }, []);
+  }, [tenantId]);
 
   const guardar = async () => {
     setGuardando(true);
@@ -93,6 +115,21 @@ const ConfiguracionPage = () => {
     }
   };
 
+  const guardarBranding = async () => {
+    setGuardandoBranding(true);
+    try {
+      await setDoc(doc(db, 'tenants', tenantId), {
+        color_principal: colorApp,
+        actualizado_en: serverTimestamp(),
+      }, { merge: true });
+      alert('✅ Color guardado. Los cambios se verán en la app al recargar.');
+    } catch (e) {
+      alert('Error al guardar: ' + e.message);
+    } finally {
+      setGuardandoBranding(false);
+    }
+  };
+
   const updateConfig = (path, value) => {
     const keys = path.split('.');
     setConfig(prev => {
@@ -111,6 +148,55 @@ const ConfiguracionPage = () => {
 
   return (
     <Layout titulo="Configuración">
+
+      {/* Color de la app */}
+      <div style={styles.section}>
+        <h2 style={styles.sectionTitulo}>🎨 Color de la aplicación</h2>
+        <div style={styles.card}>
+          <p style={{ fontSize: 13, color: '#6B6B6B', marginTop: 0, marginBottom: 16 }}>
+            Selecciona el color principal que verán los clientes y cajeros en la app.
+          </p>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+            {COLORES_PRESET.map(c => (
+              <button
+                key={c.valor}
+                onClick={() => { setColorApp(c.valor); setColorCustom(c.valor); }}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  background: c.valor,
+                  border: colorApp === c.valor ? '3px solid #000' : '3px solid transparent',
+                  cursor: 'pointer',
+                  title: c.nombre,
+                }}
+                title={c.nombre}
+              />
+            ))}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+            <label style={styles.label}>Color personalizado:</label>
+            <input
+              type="color"
+              value={colorCustom}
+              onChange={e => { setColorCustom(e.target.value); setColorApp(e.target.value); }}
+              style={{ width: 44, height: 44, borderRadius: 8, border: 'none', cursor: 'pointer', padding: 0 }}
+            />
+            <span style={{ fontSize: 13, color: '#6B6B6B', fontFamily: 'monospace' }}>{colorApp}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+            <div style={{ background: colorApp, color: 'white', borderRadius: 10, padding: '10px 20px', fontSize: 14, fontWeight: 700 }}>
+              Vista previa
+            </div>
+            <div style={{ background: colorApp + '22', color: colorApp, borderRadius: 10, padding: '10px 20px', fontSize: 14, fontWeight: 700, border: `1px solid ${colorApp}` }}>
+              Botón secundario
+            </div>
+          </div>
+          <button onClick={guardarBranding} disabled={guardandoBranding} style={{ ...styles.btnGuardar, width: 'auto', padding: '10px 24px', fontSize: 14 }}>
+            {guardandoBranding ? 'Guardando...' : 'Guardar color'}
+          </button>
+        </div>
+      </div>
 
       {/* Imagen Kiosk */}
       <div style={styles.section}>
@@ -194,25 +280,18 @@ const ConfiguracionPage = () => {
         </div>
       </div>
 
-      {/* Visibilidad de niveles */}
+      {/* Visibilidad */}
       <div style={styles.section}>
-        <h2 style={styles.sectionTitulo}>👁 Visibilidad de niveles para el cliente</h2>
+        <h2 style={styles.sectionTitulo}>👁 Visibilidad de niveles</h2>
         <div style={styles.card}>
-          <p style={{ fontSize: 13, color: '#6B6B6B', marginTop: 0, marginBottom: 16 }}>
-            Controla si los clientes pueden ver su nivel de lealtad en la app.
-          </p>
           <div style={styles.bonoRow}>
             <div style={styles.bonoInfo}>
               <div style={styles.bonoTitulo}>Mostrar niveles al cliente</div>
-              <div style={styles.bonoDesc}>El cliente puede ver si es Bronce, Oro o Platino en su perfil</div>
+              <div style={styles.bonoDesc}>El cliente puede ver si es Bronce, Oro o Platino</div>
             </div>
             <div style={styles.bonoControls}>
               <label style={styles.toggleLabel}>
-                <input
-                  type="checkbox"
-                  checked={config.niveles_visibles !== false}
-                  onChange={e => updateConfig('niveles_visibles', e.target.checked)}
-                />
+                <input type="checkbox" checked={config.niveles_visibles !== false} onChange={e => updateConfig('niveles_visibles', e.target.checked)} />
                 {config.niveles_visibles !== false ? 'Visible' : 'Oculto'}
               </label>
             </div>
@@ -221,15 +300,11 @@ const ConfiguracionPage = () => {
           <div style={styles.bonoRow}>
             <div style={styles.bonoInfo}>
               <div style={styles.bonoTitulo}>Mostrar barra de progreso</div>
-              <div style={styles.bonoDesc}>El cliente puede ver cuántos puntos le faltan para el siguiente nivel</div>
+              <div style={styles.bonoDesc}>El cliente puede ver cuántos puntos le faltan</div>
             </div>
             <div style={styles.bonoControls}>
               <label style={styles.toggleLabel}>
-                <input
-                  type="checkbox"
-                  checked={config.progreso_visible !== false}
-                  onChange={e => updateConfig('progreso_visible', e.target.checked)}
-                />
+                <input type="checkbox" checked={config.progreso_visible !== false} onChange={e => updateConfig('progreso_visible', e.target.checked)} />
                 {config.progreso_visible !== false ? 'Visible' : 'Oculto'}
               </label>
             </div>
@@ -257,9 +332,7 @@ const ConfiguracionPage = () => {
               </div>
             </div>
           </div>
-
           <div style={styles.divider} />
-
           <div style={styles.bonoRow}>
             <div style={styles.bonoInfo}>
               <div style={styles.bonoTitulo}>🛒 Bono primera compra</div>
@@ -280,9 +353,7 @@ const ConfiguracionPage = () => {
               </div>
             </div>
           </div>
-
           <div style={styles.divider} />
-
           <div style={styles.bonoRow}>
             <div style={styles.bonoInfo}>
               <div style={styles.bonoTitulo}>🎂 Bono de cumpleaños</div>
